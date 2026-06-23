@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Progress, Message } from '@arco-design/web-react';
 import { CheckOne, Download, FolderOpen, Refresh, CloseOne, Install } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import AionModal from '@/renderer/components/base/AionModal';
 import MarkdownView from '@/renderer/components/Markdown';
-import type { UpdateDownloadProgressEvent, UpdateReleaseInfo, AutoUpdateStatus } from '@/common/update/updateTypes';
+import type { UpdateDownloadProgressEvent, UpdateReleaseInfo, AutoUpdateStatus, CcbUpdateCheckResult } from '@/common/update/updateTypes';
 import { useTranslation } from 'react-i18next';
 
-type UpdateStatus = 'checking' | 'upToDate' | 'available' | 'downloading' | 'downloaded' | 'success' | 'error';
+type UpdateStatus = 'checking' | 'upToDate' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'success' | 'error';
 
 type UpdateInfo = UpdateReleaseInfo;
 
@@ -31,6 +31,13 @@ const UpdateModal: React.FC = () => {
   // Whether electron-updater auto-update is available (determined automatically, not user-controllable)
   const [autoUpdateAvailable, setAutoUpdateAvailable] = useState(false);
   const [autoUpdateInfo, setAutoUpdateInfo] = useState<{ version: string; releaseNotes?: string } | null>(null);
+  const [ccbCheck, setCcbCheck] = useState<CcbUpdateCheckResult | null>(null);
+  const [ccbApplying, setCcbApplying] = useState(false);
+  const [aionUiUpdateAvailable, setAionUiUpdateAvailable] = useState(false);
+  const internalFeedDownloadRef = useRef(false);
+
+  const isInternalFeedUrl = (url?: string) =>
+    Boolean(url && (url.includes('67.216.206.3') || url.includes('updates.yourcompany.com')));
 
   const resetState = () => {
     setStatus('checking');
@@ -43,6 +50,10 @@ const UpdateModal: React.FC = () => {
     setReleasePageUrl('');
     setAutoUpdateAvailable(false);
     setAutoUpdateInfo(null);
+    setCcbCheck(null);
+    setCcbApplying(false);
+    setAionUiUpdateAvailable(false);
+    internalFeedDownloadRef.current = false;
   };
 
   const includePrerelease = useMemo(() => localStorage.getItem('update.includePrerelease') === 'true', [visible]);
@@ -58,58 +69,112 @@ const UpdateModal: React.FC = () => {
   const checkForUpdates = async () => {
     setStatus('checking');
     try {
-      // Try auto-update (electron-updater) first
-      let autoUpdateOk = false;
-      try {
-        const res = await ipcBridge.autoUpdate.check.invoke({ includePrerelease });
-        if (res?.success && res.data?.updateInfo) {
-          autoUpdateOk = true;
-          setAutoUpdateInfo({
-            version: res.data.updateInfo.version,
-            releaseNotes: res.data.updateInfo.releaseNotes,
-          });
-        } else if (res?.msg) {
-          console.warn('Auto-update check failed, using manual mode:', res.msg);
-        }
-      } catch (err) {
-        console.warn('Auto-update check error, using manual mode:', err);
-      }
-      setAutoUpdateAvailable(autoUpdateOk);
-
-      // Always run manual check for version info and release notes
       const res = await ipcBridge.update.check.invoke({ includePrerelease });
       if (!res?.success) {
         throw new Error(res?.msg || t('update.checkFailed'));
       }
       setCurrentVersion(res.data?.currentVersion || '');
 
-      if (autoUpdateOk) {
-        // Auto-update available — use manual check data for display only
-        if (res.data?.latest) {
-          setUpdateInfo(res.data.latest);
-          setReleasePageUrl(res.data.latest.htmlUrl || '');
+      const internalFeed = isInternalFeedUrl(res.data?.latest?.recommendedAsset?.url);
+
+      let autoUpdateOk = false;
+      if (!internalFeed) {
+        try {
+          const autoRes = await ipcBridge.autoUpdate.check.invoke({ includePrerelease });
+          if (autoRes?.success && autoRes.data?.updateInfo) {
+            autoUpdateOk = true;
+            setAutoUpdateInfo({
+              version: autoRes.data.updateInfo.version,
+              releaseNotes: autoRes.data.updateInfo.releaseNotes,
+            });
+          } else if (autoRes?.msg) {
+            console.warn('Auto-update check failed, using manual mode:', autoRes.msg);
+          }
+        } catch (err) {
+          console.warn('Auto-update check error, using manual mode:', err);
         }
-        setStatus('available');
-        return;
+      }
+      setAutoUpdateAvailable(autoUpdateOk);
+
+      let nextCcbCheck: CcbUpdateCheckResult | null = null;
+      try {
+        const ccbRes = await ipcBridge.ccbUpdate.check.invoke({ channel: includePrerelease ? 'dev' : 'stable' });
+        if (ccbRes?.success && ccbRes.data) {
+          nextCcbCheck = ccbRes.data;
+          setCcbCheck(ccbRes.data);
+        }
+      } catch (err) {
+        console.warn('CCB update check unavailable:', err);
       }
 
-      // Manual mode
-      if (res.data?.updateAvailable && res.data.latest) {
+      if (res.data?.latest) {
         setUpdateInfo(res.data.latest);
         setReleasePageUrl(res.data.latest.htmlUrl || '');
-        if (!res.data.latest.recommendedAsset) {
+      }
+
+      const aionHasUpdate = autoUpdateOk || Boolean(res.data?.updateAvailable && res.data.latest);
+      setAionUiUpdateAvailable(aionHasUpdate);
+      const ccbHasUpdate = Boolean(nextCcbCheck?.updateAvailable);
+
+      if (aionHasUpdate || ccbHasUpdate) {
+        if (res.data?.updateAvailable && res.data.latest && !res.data.latest.recommendedAsset && !autoUpdateOk) {
           setErrorMsg(t('update.noCompatibleAssetManual'));
         }
         setStatus('available');
         return;
       }
 
-      setUpdateInfo(res.data?.latest || null);
-      setReleasePageUrl(res.data?.latest?.htmlUrl || '');
       setStatus('upToDate');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('Update check failed:', err);
+      setErrorMsg(msg);
+      setStatus('error');
+    }
+  };
+
+  const applyCcbUpdate = async () => {
+    if (!ccbCheck?.updateAvailable) return;
+    setCcbApplying(true);
+    try {
+      const res = await ipcBridge.ccbUpdate.apply.invoke();
+      if (!res?.success || !res.data?.success) {
+        throw new Error(res?.msg || res?.data?.error || t('update.checkFailed'));
+      }
+      if (ccbCheck.mode === 'hot') {
+        Message.success('万鼎后端已更新。请完全退出并重新打开 WanD。');
+        setCcbCheck(null);
+        await checkForUpdates();
+      }
+      // full mode: main process schedules NSIS /S and quits — no success toast
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(msg);
+      setStatus('error');
+    } finally {
+      setCcbApplying(false);
+    }
+  };
+
+  const startCcbFullDownload = async () => {
+    if (!ccbCheck || ccbCheck.mode !== 'full') return;
+    setStatus('downloading');
+    try {
+      const fileName = `CCB-Wanding-${ccbCheck.latest}.exe`;
+      const res = await ipcBridge.update.download.invoke({
+        url: ccbCheck.fullInstaller.url,
+        expected_sha256: ccbCheck.fullInstaller.sha256,
+        file_name: fileName,
+      });
+      if (!res?.success || !res.data) {
+        throw new Error(res?.msg || t('update.downloadStartFailed'));
+      }
+      internalFeedDownloadRef.current = true;
+      setDownloadId(res.data.downloadId);
+      setDownloadPath(res.data.file_path);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('CCB full installer download failed:', err);
       setErrorMsg(msg);
       setStatus('error');
     }
@@ -126,10 +191,12 @@ const UpdateModal: React.FC = () => {
       // 回退到 electron-updater 的下载（走 GitHub），保证用户能升级。
       if (updateInfo?.recommendedAsset) {
         const asset = updateInfo.recommendedAsset;
+        internalFeedDownloadRef.current = isInternalFeedUrl(asset.url);
         const res = await ipcBridge.update.download.invoke({
           url: asset.url,
           fallbackUrl: asset.fallbackUrl,
           file_name: asset.name,
+          expected_sha256: asset.sha256,
         });
         if (!res?.success || !res.data) {
           throw new Error(res?.msg || t('update.downloadStartFailed'));
@@ -288,6 +355,14 @@ const UpdateModal: React.FC = () => {
   };
 
   const renderContent = () => {
+    const urlsMatch = Boolean(
+      updateInfo?.recommendedAsset?.url &&
+        ccbCheck?.fullInstaller?.url &&
+        updateInfo.recommendedAsset.url === ccbCheck.fullInstaller.url
+    );
+    const bundledSameInstaller = urlsMatch && (!aionUiUpdateAvailable || ccbCheck?.mode === 'full');
+    const showAionUiRow = Boolean((updateInfo?.recommendedAsset || autoUpdateAvailable) && !bundledSameInstaller);
+
     switch (status) {
       case 'checking':
         return (
@@ -316,46 +391,64 @@ const UpdateModal: React.FC = () => {
       case 'available':
         return (
           <div className='flex flex-col h-full'>
-            {/* Version info header */}
-            <div className='flex items-center justify-between px-24px py-16px border-b border-border-2 bg-fill-1'>
-              <div className='flex items-center gap-12px'>
-                <div className='w-40px h-40px bg-[rgb(var(--primary-6))]/12 rounded-10px flex items-center justify-center'>
-                  <Download size='20' fill='rgb(var(--primary-6))' />
-                </div>
-                <div>
-                  <div className='text-15px font-600 text-t-primary'>{t('update.availableTitle')}</div>
-                  <div className='text-12px text-t-tertiary mt-2px'>
-                    {currentVersion} →{' '}
-                    <span className='text-[rgb(var(--primary-6))] font-500'>
-                      {updateInfo?.version || autoUpdateInfo?.version}
-                    </span>
+            <div className='px-24px py-16px border-b border-border-2 bg-fill-1'>
+              <div className='text-15px font-600 text-t-primary mb-12px'>{t('update.availableTitle')}</div>
+              <div className='flex flex-col gap-10px'>
+                {ccbCheck?.updateAvailable && (
+                  <div className='flex items-center justify-between gap-12px px-12px py-10px rounded-8px bg-fill-2'>
+                    <div className='text-13px text-t-primary'>
+                      {bundledSameInstaller ? 'WanD 完整更新' : '万鼎后端'}{' '}
+                      <span className='text-t-tertiary'>
+                        {ccbCheck.installed || '-'} → {ccbCheck.latest}
+                      </span>
+                      {bundledSameInstaller ? (
+                        <span className='text-12px text-t-tertiary ml-8px'>（含界面与 aioncore）</span>
+                      ) : null}
+                      {!bundledSameInstaller && ccbCheck.hotUpdate?.size ? (
+                        <span className='text-12px text-t-tertiary ml-8px'>
+                          (~{formatSize(ccbCheck.hotUpdate.size)})
+                        </span>
+                      ) : null}
+                    </div>
+                    <Button
+                      type='primary'
+                      size='small'
+                      loading={ccbApplying}
+                      onClick={() => void (ccbCheck.mode === 'full' ? startCcbFullDownload() : applyCcbUpdate())}
+                      className='!px-16px'
+                    >
+                      {ccbCheck.mode === 'hot' ? '热更新' : '下载安装包'}
+                    </Button>
                   </div>
-                </div>
-              </div>
-              <div className='flex items-center gap-12px'>
-                {!hasCompatibleManualAsset && !autoUpdateAvailable && releasePageUrl ? (
-                  <Button type='primary' size='small' onClick={openReleasePage} className='!px-16px'>
-                    {t('update.goToRelease')}
-                  </Button>
-                ) : autoUpdateAvailable ? (
-                  <Button type='primary' size='small' onClick={startDownload} className='!px-16px'>
-                    {t('update.downloadAndInstall')}
-                  </Button>
-                ) : (
-                  <Button type='primary' size='small' onClick={startDownload} className='!px-16px'>
-                    {t('update.downloadButton')}
-                  </Button>
+                )}
+                {showAionUiRow && (
+                  <div className='flex items-center justify-between gap-12px px-12px py-10px rounded-8px bg-fill-2'>
+                    <div className='text-13px text-t-primary'>
+                      AionUI{' '}
+                      <span className='text-t-tertiary'>
+                        {currentVersion || '-'} → {updateInfo?.version || autoUpdateInfo?.version}
+                      </span>
+                    </div>
+                    {!hasCompatibleManualAsset && !autoUpdateAvailable && releasePageUrl ? (
+                      <Button type='primary' size='small' onClick={openReleasePage} className='!px-16px'>
+                        {t('update.goToRelease')}
+                      </Button>
+                    ) : (
+                      <Button type='primary' size='small' onClick={startDownload} className='!px-16px'>
+                        {autoUpdateAvailable ? t('update.downloadAndInstall') : t('update.downloadButton')}
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
 
-            {!hasCompatibleManualAsset && !autoUpdateAvailable && (
+            {!hasCompatibleManualAsset && !autoUpdateAvailable && !ccbCheck?.updateAvailable && releasePageUrl && (
               <div className='mx-24px mt-12px px-12px py-10px text-12px rounded-8px bg-[rgb(var(--warning-6))]/10 text-[rgb(var(--warning-6))]'>
                 {t('update.noCompatibleAssetManual')}
               </div>
             )}
 
-            {/* Release notes content */}
             <div className='flex-1 min-h-0 overflow-y-auto px-24px py-16px custom-scrollbar'>
               {updateInfo?.name && <div className='text-14px font-500 text-t-primary mb-12px'>{updateInfo.name}</div>}
               {updateInfo?.body || autoUpdateInfo?.releaseNotes ? (
@@ -416,6 +509,20 @@ const UpdateModal: React.FC = () => {
           </div>
         );
 
+      case 'installing':
+        return (
+          <div className='flex flex-col items-center justify-center py-48px px-32px'>
+            <div className='w-48px h-48px mb-20px relative'>
+              <div className='absolute inset-0 border-3 border-fill-3 rounded-full' />
+              <div className='absolute inset-0 border-3 border-primary border-t-transparent rounded-full animate-spin' />
+            </div>
+            <div className='text-16px text-t-primary font-600 mb-8px'>正在静默安装…</div>
+            <div className='text-13px text-t-tertiary text-center max-w-360px'>
+              WanD 将自动关闭，安装完成后请重新打开应用。
+            </div>
+          </div>
+        );
+
       case 'success':
         return (
           <div className='flex flex-col items-center justify-center py-48px px-32px'>
@@ -426,14 +533,37 @@ const UpdateModal: React.FC = () => {
             <div className='text-12px text-t-tertiary mb-24px text-center max-w-360px break-all line-clamp-2'>
               {downloadPath}
             </div>
-            <div className='flex gap-12px'>
-              <Button size='small' onClick={showInFolder} icon={<FolderOpen size='14' />} className='!px-16px'>
-                {t('update.showInFolder')}
+            {internalFeedDownloadRef.current ? (
+              <Button
+                type='primary'
+                size='small'
+                icon={<Install size='14' />}
+                className='!px-16px'
+                onClick={() => {
+                  setStatus('installing');
+                  void ipcBridge.update.silentInstall
+                    .invoke({ installer_path: downloadPath })
+                    .then((res) => {
+                      if (!res?.success) throw new Error(res?.msg || 'Silent install failed');
+                    })
+                    .catch((err: unknown) => {
+                      setErrorMsg(err instanceof Error ? err.message : String(err));
+                      setStatus('error');
+                    });
+                }}
+              >
+                立即安装
               </Button>
-              <Button type='primary' size='small' onClick={openFile} className='!px-16px'>
-                {t('update.openFile')}
-              </Button>
-            </div>
+            ) : (
+              <div className='flex gap-12px'>
+                <Button size='small' onClick={showInFolder} icon={<FolderOpen size='14' />} className='!px-16px'>
+                  {t('update.showInFolder')}
+                </Button>
+                <Button type='primary' size='small' onClick={openFile} className='!px-16px'>
+                  {t('update.openFile')}
+                </Button>
+              </div>
+            )}
           </div>
         );
 
