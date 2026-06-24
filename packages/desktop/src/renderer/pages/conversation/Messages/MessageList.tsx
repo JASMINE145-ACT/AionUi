@@ -9,8 +9,9 @@ import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup, TMessage
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { iconColors } from '@/renderer/styles/colors';
 import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/utils/chat/chatMinimapEvents';
-import { Image } from '@arco-design/web-react';
-import { Down } from '@icon-park/react';
+import { Button, Image } from '@arco-design/web-react';
+import { Attention, Down } from '@icon-park/react';
+import { theme } from '@office-ai/platform';
 import MessageAcpPermission from '@renderer/pages/conversation/Messages/acp/MessageAcpPermission';
 import MessagePermission from './components/MessagePermission';
 import MessageAcpToolCall from '@renderer/pages/conversation/Messages/acp/MessageAcpToolCall';
@@ -230,7 +231,17 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = Reac
     prev.highlighted === next.highlighted
 );
 
-const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }> = ({ emptySlot }) => {
+type InterruptedBannerProps = {
+  show: boolean;
+  lastUserPrompt: string | null;
+  onRetry: () => void;
+};
+
+const MessageList: React.FC<{
+  className?: string;
+  emptySlot?: React.ReactNode;
+  interruptedBanner?: InterruptedBannerProps;
+}> = ({ emptySlot, interruptedBanner }) => {
   const list = useMessageList();
   const isMessageListLoading = useMessageListLoading();
   const artifacts = useConversationArtifacts();
@@ -250,6 +261,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     let diffsSourceMessageIds: string[] = [];
     let toolList: Array<IMessageToolGroup | IMessageAcpToolCall | IMessageToolCall> = [];
     let toolSourceMessageIds: string[] = [];
+    let seenAgentDelegation = false;
 
     const pushFileDffChanges = (changes: FileChangeInfo, sourceMessageId: string, created_at: number) => {
       if (!diffsChanges.length) {
@@ -289,6 +301,21 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       // Skip hidden and available_commands messages
       if (message.hidden) continue;
       if (message.type === 'available_commands') continue;
+      // Reset delegation flag at each user turn boundary
+      if (message.type === 'user') seenAgentDelegation = false;
+      // Track agent delegations so we can suppress subagent plan messages even after toolList flushes
+      if (message.type === 'acp_tool_call' && (message as IMessageAcpToolCall).content?.update?.kind === 'agent') {
+        seenAgentDelegation = true;
+      }
+      // TodoWrite inside a sub-agent (Agent(...) delegation) surfaces as a 'plan'
+      // message tagged with parentToolUseId. It's internal sub-agent scratch state,
+      // not part of the main flow — don't let it land as a standalone card.
+      if (message.type === 'plan') {
+        if (message.content?.parentToolUseId) continue;
+        // Fallback: seenAgentDelegation persists across toolList flushes, so plan messages
+        // that arrive after the tool group closes (e.g. after the main reply) are still suppressed.
+        if (seenAgentDelegation) continue;
+      }
       if (message.type === 'tool_group') {
         if (message.content.length === 1) {
           const writeFileResults = message.content
@@ -505,6 +532,24 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
               {processedList.map((item, index) => (
                 <React.Fragment key={getProcessedItemAnchorId(item) || index}>{renderItem(index, item)}</React.Fragment>
               ))}
+              {interruptedBanner?.show && interruptedBanner.lastUserPrompt && (
+                <div className='min-w-0 message-item px-8px m-t-10px max-w-full md:max-w-780px mx-auto'>
+                  <div className='w-full'>
+                    <div className='bg-message-tips rd-8px p-x-12px p-y-8px flex items-center gap-4px'>
+                      <Attention
+                        theme='filled'
+                        size='16'
+                        fill={theme.Color.FunctionalColor.warn}
+                        className='m-t-2px flex-shrink-0'
+                      />
+                      <span className='flex-1 text-t-primary text-13px'>工具调用被中断，点击重试</span>
+                      <Button size='mini' type='secondary' onClick={interruptedBanner.onRetry}>
+                        重试
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className='h-20px' />
             </div>
           </div>

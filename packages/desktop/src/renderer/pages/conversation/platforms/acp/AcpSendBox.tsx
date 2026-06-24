@@ -1,5 +1,9 @@
 import { ipcBridge } from '@/common';
 import type { IConversationMcpStatus } from '@/common/config/storage';
+import { ensureCcbSessionPreferredModel } from '@/common/config/ensureCcbSessionPreferredModel';
+import { ensureCcbSessionPreferredMode } from '@/common/config/ensureCcbSessionPreferredMode';
+import { normalizeCcbMiniMaxModelId } from '@/common/config/ccbAcpModelInfo';
+import { getCcbSessionPreferredModelId } from '@/common/config/ccbSessionPreferredModelStore';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { isSideQuestionSupported } from '@/common/chat/sideQuestion';
 import { parseError, uuid } from '@/common/utils';
@@ -16,6 +20,7 @@ import FileAttachButton from '@/renderer/components/media/FileAttachButton';
 import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
 import { useAcpModelInfo } from '@/renderer/hooks/agent/useAcpModelInfo';
+import { useCcbAuthorityActive, useCcbModelInfo } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { useAgentModesForBackend } from '@/renderer/hooks/agent/useAgentModesForBackend';
 import { savePreferredMode } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
@@ -26,6 +31,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
 import { useLatestRef } from '@/renderer/hooks/ui/useLatestRef';
 import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/hooks';
+import { debugSessionLog } from '@/renderer/utils/debugSessionLog';
 import {
   shouldEnqueueConversationCommand,
   useConversationCommandQueue,
@@ -33,8 +39,15 @@ import {
 } from '@/renderer/pages/conversation/platforms/useConversationCommandQueue';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
+import { useConversationProcessingStartedAt } from '@/renderer/pages/conversation/runtime/conversationProcessingClock';
+import {
+  acceptPostIdleWakeTurn,
+  beginPostIdleWakeWindow,
+  clearPostIdleWakeWindow,
+} from '@/renderer/pages/conversation/runtime/postIdleWakeWindow';
 import { getConversationRuntimeWorkspaceErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
+import { buildSendAcceptedUserTextMessage } from '@/renderer/pages/conversation/utils/sendAcceptedUserMessage';
 import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
 import { allSupportedExts } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
@@ -43,7 +56,7 @@ import { mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { Message, Tag } from '@arco-design/web-react';
 import { Brain, MagicHat, Shield } from '@icon-park/react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildSendFailureError } from './buildSendFailureError';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
@@ -98,7 +111,9 @@ const AcpSendBox: React.FC<{
   agent_name?: string;
   workspacePath?: string;
   messageState: UseAcpMessageReturn;
-}> = ({ conversation_id, backend, session_mode, agent_name, workspacePath, messageState }) => {
+  onLastUserPromptChange?: (text: string) => void;
+  onSendHandlerReady?: (fn: (msg: string) => Promise<void>) => void;
+}> = ({ conversation_id, backend, session_mode, agent_name, workspacePath, messageState, onLastUserPromptChange, onSendHandlerReady }) => {
   const { aiProcessing, setAiProcessing, resetState, hasThinkingMessage, slashCommands, fetchSlashCommands } =
     messageState;
   const { t } = useTranslation();
@@ -113,6 +128,9 @@ const AcpSendBox: React.FC<{
   const conversationContext = useConversationContextSafe();
   const loadedSkills = conversationContext?.loadedSkills ?? [];
   const assistantId = conversationContext?.assistantId;
+  const initialModelId = conversationContext?.initialModelId;
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive(backend === 'claude');
+  const { modelInfo: ccbModelInfo } = useCcbModelInfo(backend === 'claude' && ccbAuthorityActive);
   const loadedMcpStatuses =
     conversationContext?.loadedMcpStatuses ??
     (conversationContext?.loadedMcpServers ?? []).map<IConversationMcpStatus>((name) => ({
@@ -122,11 +140,11 @@ const AcpSendBox: React.FC<{
     }));
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const [currentMode, setCurrentMode] = useState<string | undefined>(session_mode);
-  const prepareRuntimeSync = useCallback(async () => {
+  const prepareRuntimeSync = useCallback(async (options?: { force?: boolean }) => {
     if (teamPermission) {
       await teamPermission.warmupSession();
     }
-    await warmupConversation(conversation_id);
+    await warmupConversation(conversation_id, options);
   }, [conversation_id, teamPermission]);
 
   // Drive the mobile sheet's model entry off the same source AcpModelSelector uses
@@ -137,9 +155,10 @@ const AcpSendBox: React.FC<{
   } = useAcpModelInfo({
     conversation_id,
     backend,
+    initialModelId,
     prepareRuntime: prepareRuntimeSync,
     enabled: isMobile,
-    persistGlobalPreference: !assistantId,
+    persistGlobalPreference: !assistantId && !ccbAuthorityActive,
     onSelectModelSuccess: () => Message.success(t('agent.model.switchSuccess')),
     onSelectModelFailed: () => Message.error(t('agent.model.switchFailed')),
   });
@@ -214,6 +233,7 @@ const AcpSendBox: React.FC<{
   const addOrUpdateMessage = useAddOrUpdateMessage(); // Move this here so it's available in useEffect
   const addOrUpdateMessageRef = useLatestRef(addOrUpdateMessage);
   const runtimeView = useConversationRuntimeView(conversation_id);
+  const processingStartedAt = useConversationProcessingStartedAt(conversation_id);
 
   // Shared file handling logic
   const { handleFilesAdded, clearFiles } = useSendBoxFiles({
@@ -249,6 +269,9 @@ const AcpSendBox: React.FC<{
     conversation_id: conversation_id,
     backend,
     workspacePath,
+    initialModelId,
+    initialSessionMode: session_mode,
+    ccbAuthorityActive,
     setAiProcessing,
     resetState,
     markSendStarted: runtimeView.markSendStarted,
@@ -264,9 +287,38 @@ const AcpSendBox: React.FC<{
 
       runtimeView.markSendStarted();
       setAiProcessing(true);
+      debugSessionLog(
+        'AcpSendBox.tsx:executeCommand',
+        'user send started',
+        { conversation_id, inputPreview: input.slice(0, 60) },
+        'H0'
+      );
 
       try {
         if (teamPermission) await teamPermission.warmupSession();
+        // Force warmup before send so idle-killed agents get a fresh ACP session id
+        // instead of reusing a stale acp_session_id on the next prompt.
+        beginPostIdleWakeWindow(conversation_id);
+        await prepareRuntimeSync({ force: true });
+        if (ccbAuthorityActive) {
+          const preferredModelId =
+            getCcbSessionPreferredModelId(conversation_id, initialModelId) ?? initialModelId;
+          if (preferredModelId) {
+            const normalizedPreferred =
+              normalizeCcbMiniMaxModelId(preferredModelId) ?? preferredModelId;
+            await ensureCcbSessionPreferredModel({
+              conversation_id,
+              preferredModelId: normalizedPreferred,
+              ccbModelInfo,
+            });
+          }
+          if (session_mode) {
+            await ensureCcbSessionPreferredMode({
+              conversation_id,
+              preferredMode: session_mode,
+            });
+          }
+        }
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.acpConversation.sendMessage.invoke({
           input: displayMessage,
@@ -274,8 +326,24 @@ const AcpSendBox: React.FC<{
           files,
         });
         runtimeView.markSendAccepted(result.turn_id, result.runtime, result.msg_id);
+        acceptPostIdleWakeTurn(conversation_id, result.turn_id);
+        addOrUpdateMessageRef.current(
+          buildSendAcceptedUserTextMessage({
+            conversation_id,
+            msg_id: result.msg_id,
+            turn_id: result.turn_id,
+            content: displayMessage,
+          })
+        );
+        debugSessionLog(
+          'AcpSendBox.tsx:executeCommand',
+          'send accepted',
+          { conversation_id, turn_id: result.turn_id, msg_id: result.msg_id },
+          'H0'
+        );
         emitter.emit('chat.history.refresh');
       } catch (error: unknown) {
+        clearPostIdleWakeWindow(conversation_id);
         const errorMsg =
           getConversationRuntimeWorkspaceErrorMessage(error, t) || parseError(error) || t('common.unknownError');
         runtimeView.markSendFailed(errorMsg);
@@ -343,7 +411,7 @@ Please check your local CLI tool authentication status`,
         emitter.emit('acp.workspace.refresh');
       }
     },
-    [backend, checkAndUpdateTitle, conversation_id, resetState, runtimeView, setAiProcessing, t, workspacePath]
+    [ccbAuthorityActive, ccbModelInfo, checkAndUpdateTitle, conversation_id, initialModelId, prepareRuntimeSync, resetState, runtimeView, setAiProcessing, t, teamPermission, workspacePath]
   );
 
   const {
@@ -379,6 +447,8 @@ Please check your local CLI tool authentication status`,
     clearFiles();
     emitter.emit('acp.selected.file.clear');
 
+    onLastUserPromptChange?.(message);
+
     if (
       shouldEnqueueConversationCommand({
         enabled: true,
@@ -392,6 +462,13 @@ Please check your local CLI tool authentication status`,
 
     await executeCommand({ input: message, files: allFiles });
   };
+
+  const onSendHandlerRef = useRef(onSendHandler);
+  onSendHandlerRef.current = onSendHandler;
+
+  useEffect(() => {
+    onSendHandlerReady?.((msg) => onSendHandlerRef.current(msg));
+  }, [onSendHandlerReady]);
 
   const handleEditQueuedCommand = useCallback(
     (item: ConversationCommandQueueItem) => {
@@ -590,7 +667,11 @@ Please check your local CLI tool authentication status`,
         onRemove={remove}
         onClear={clear}
       />
-      <ThoughtDisplay running={aiProcessing && !hasThinkingMessage} onStop={handleStop} />
+      <ThoughtDisplay
+        running={aiProcessing && !hasThinkingMessage}
+        startedAt={processingStartedAt}
+        onStop={handleStop}
+      />
 
       <SendBox
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
