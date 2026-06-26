@@ -174,6 +174,20 @@ export interface IConfigStorageRefer {
    * still-on-disk legacy field.
    */
   'migration.assistantsMigrated_v1'?: boolean;
+  'migration.ccbAgentsUnified_v1'?: boolean;
+  'migration.ccbAgentsGuidCatalog_v1'?: boolean;
+  'migration.ccbWandingPrunePresets_v1'?: boolean;
+  'migration.ccbWandingMcpServers_v1'?: boolean;
+  'migration.ccbWandingGlobalRouter_v1'?: boolean;
+  'migration.ccbWandingSpecialistGuidCards_v1'?: boolean;
+  'migration.ccbWandingOfficeDelegatable_v1'?: boolean;
+  'migration.ccbWandingOfficeAgentTypeIds_v1'?: boolean;
+  'migration.ccbWandingWordCreatorOfficeWord_v1'?: boolean;
+  'migration.ccbWandingExcelCreatorExcelMcp_v1'?: boolean;
+  'migration.ccbWandingL1SelfContained_v1'?: boolean;
+  'migration.ccbWandingAgentMdBom_v1'?: boolean;
+  'migration.ccbAssistantProfilesSeeded_v1'?: boolean;
+  'migration.ccbRuntimeConfigMigrated_v1'?: boolean;
   // Desktop Pet: whether the desktop pet feature is enabled
   'pet.enabled'?: boolean;
   // Desktop Pet: size in pixels (200, 280, or 360)
@@ -277,6 +291,10 @@ export type TChatConversation =
           session_mode?: string;
           /** Persisted model ID for resume support / 持久化的模型 ID，用于恢复 */
           current_model_id?: string;
+          ccb_preferred_model_id?: string;
+          ccb_assistant_profile_id?: string;
+          ccb_agent_id?: string;
+          acp_meta?: Record<string, unknown>;
           /** Cached config options from ACP backend / 缓存的 ACP 配置选项 */
           cached_config_options?: import('@/common/types/platform/acpTypes').AcpSessionConfigOption[];
           /** Pending config option selections from Guid page / Guid 页面待应用的配置选项 */

@@ -220,3 +220,22 @@ export interface AcpPermissionRequest {
     locations?: ToolCallLocationItem[];
   };
 }
+
+export interface AcpAskUserQuestionOption {
+  option_id?: string;
+  label?: string;
+  name?: string;
+  description?: string;
+  value?: string;
+}
+
+export interface AcpAskUserQuestion {
+  session_id: string;
+  question: string;
+  header?: string;
+  options?: AcpAskUserQuestionOption[];
+  multi_select?: boolean;
+  default_option_id?: string;
+  tool_call_id?: string;
+  metadata?: Record<string, unknown>;
+}

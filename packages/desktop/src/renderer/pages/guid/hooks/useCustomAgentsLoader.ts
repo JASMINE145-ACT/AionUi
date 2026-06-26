@@ -5,6 +5,10 @@
  */
 
 import { ipcBridge } from '@/common';
+import {
+  assistantFromCcbAgent,
+  filterGuidCatalogAgents,
+} from '@/common/config/ccbAgentCatalog';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
 import { useAgents } from '@/renderer/hooks/agent/useAgents';
@@ -68,6 +72,22 @@ export const useCustomAgentsLoader = ({
   // all see the same list without duplicate HTTP calls.
   const { data: assistantList } = useSWR('assistants.list', async () => {
     try {
+      const ccbAuthorityActive = await ipcBridge.ccbModelService.isAuthorityActive
+        .invoke()
+        .catch(() => false);
+
+      if (ccbAuthorityActive) {
+        const ccbAgents = await ipcBridge.ccbAgentsService.listAgents.invoke();
+        return filterGuidCatalogAgents(ccbAgents)
+          .map((agent, index) => assistantFromCcbAgent(agent, index))
+          .sort((a, b) => {
+            const aOrder = typeof a.sort_order === 'number' ? a.sort_order : Number.MAX_SAFE_INTEGER;
+            const bOrder = typeof b.sort_order === 'number' ? b.sort_order : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.name.localeCompare(b.name);
+          });
+      }
+
       return await ipcBridge.assistants.list.invoke();
     } catch (error) {
       console.error('Failed to load assistants:', error);

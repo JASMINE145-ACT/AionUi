@@ -1,0 +1,33 @@
+{
+  "title": "组织知识库",
+  "docTitle": "万鼎业务知识库",
+  "unconfigured": "未配置 ORG_SERVER_URL。请在安装包或 org-server.json 中设置组织服务器地址。",
+  "loginTitle": "登录组织知识库",
+  "username": "用户名",
+  "password": "密码",
+  "login": "登录",
+  "save": "保存",
+  "history": "历史版本",
+  "revert": "撤回到此版本",
+  "offlineReadOnly": "当前离线，仅可查看缓存；保存已禁用。",
+  "offline": "离线",
+  "loggedInAs": "账号：{{user}}",
+  "updatedBy": "更新人：{{user}}",
+  "noHistory": "暂无历史版本",
+  "versionLabel": {
+    "initial": "初始版本",
+    "numbered": "第{{version}}版",
+    "revert": "第{{version}}版（回退自 v{{from}}）"
+  },
+  "changeKind": {
+    "create": "初始创建",
+    "update": "内容更新",
+    "revert": "版本回退"
+  },
+  "message": {
+    "saveSuccess": "已保存",
+    "revertSuccess": "已撤回",
+    "conflict": "版本冲突，请刷新后重试",
+    "loginFailed": "组织登录失败"
+  }
+}

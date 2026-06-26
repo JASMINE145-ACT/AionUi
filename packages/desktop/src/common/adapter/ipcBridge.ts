@@ -35,6 +35,13 @@ import type {
   UpdateAssistantRequest,
 } from '../types/agent/assistantTypes';
 import type { PreviewHistoryTarget, PreviewSnapshotInfo } from '../types/office/preview';
+import type {
+  OrgKnowledgeDoc,
+  OrgKnowledgeDocSummary,
+  OrgKnowledgeRevisionSummary,
+  RevertOrgKnowledgeDocRequest,
+  UpdateOrgKnowledgeDocRequest,
+} from '../types/orgKnowledge/orgKnowledgeTypes';
 import type { AcpModelInfo } from '../types/platform/acpTypes';
 import type {
   CreateProviderRequest,
@@ -55,6 +62,18 @@ import type {
   TTeam,
   TeamAgent,
 } from '../types/team/teamTypes';
+import type {
+  AddWorkTaskAttachmentParams,
+  CreateTeamUserParams,
+  CreateWorkTaskParams,
+  UpdateTeamUserRoleParams,
+  UpdateWorkTaskParams,
+  WorkTask,
+  WorkTaskMember,
+  WorkTaskQueryResponse,
+  WorkTaskScope,
+  WorkTaskStatus,
+} from '../types/workTasks/workTaskTypes';
 import type {
   AutoUpdateStatus,
   UpdateCheckRequest,
@@ -189,7 +208,17 @@ export const conversation = {
     (list) => list.map(fromApiConversation)
   ),
   remove: httpDelete<boolean, { id: string }>((p) => `/api/conversations/${p.id}`),
-  update: httpPatch<boolean, { id: string; updates: Partial<TChatConversation>; merge_extra?: boolean }>(
+  update: httpPatch<
+    boolean,
+    {
+      id: string;
+      updates: Partial<Omit<TChatConversation, 'extra'>> & {
+        model?: TProviderWithModel;
+        extra?: Partial<Record<string, unknown>>;
+      };
+      merge_extra?: boolean;
+    }
+  >(
     (p) => `/api/conversations/${p.id}`,
     (p) => {
       const updates = p.updates as Record<string, unknown>;
@@ -480,6 +509,7 @@ export const update = {
   check: bridge.buildProvider<IBridgeResponse<UpdateCheckResult>, UpdateCheckRequest>('update.check'),
   download: bridge.buildProvider<IBridgeResponse<UpdateDownloadResult>, UpdateDownloadRequest>('update.download'),
   downloadProgress: bridge.buildEmitter<UpdateDownloadProgressEvent>('update.download.progress'),
+  silentInstall: bridge.buildProvider<IBridgeResponse, { installer_path: string }>('update.silent-install'),
 };
 
 export const autoUpdate = {
@@ -624,6 +654,14 @@ export const workspaceOfficeWatch = {
   fileAdded: wsEmitter<{ file_path: string; workspace: string }>('workspaceOfficeWatch.fileAdded'),
 };
 
+export const workspaceWatch = {
+  start: httpPost<void, { workspace: string; conversation_id?: string }>(
+    '/api/fs/office-watch/start',
+    (p) => ({ workspace: p.workspace })
+  ),
+  stop: httpPost<void, { workspace: string }>('/api/fs/office-watch/stop'),
+};
+
 // File streaming updates (real-time content push when agent writes)
 export const fileStream = {
   contentUpdate: wsEmitter<{
@@ -675,6 +713,99 @@ export const fileSnapshot = {
 // ---------------------------------------------------------------------------
 // Google Auth — stubbed (Electron-native OAuth flow)
 // ---------------------------------------------------------------------------
+
+type AuthUser = {
+  id: string;
+  username: string;
+  work_task_role?: 'manager' | 'employee';
+};
+
+type AuthUserResponse = {
+  success: boolean;
+  user: AuthUser;
+};
+
+type RawAuthUser = AuthUser & {
+  password_hash?: string;
+};
+
+const normalizeAuthUser = (user: AuthUser): WorkTaskMember => ({
+  id: user.id,
+  username: user.username,
+  work_task_role: user.work_task_role ?? 'manager',
+});
+
+export const auth = {
+  currentUser: withResponseMap(httpGet<AuthUserResponse, void>('/api/auth/user'), (raw) => normalizeAuthUser(raw.user)),
+  listUsers: withResponseMap(httpGet<RawAuthUser[], void>('/api/auth/internal/users'), (users) =>
+    users.map(normalizeAuthUser)
+  ),
+  createUser: httpPost<WorkTaskMember, CreateTeamUserParams>(
+    '/api/auth/internal/users',
+    (p) => ({
+      username: p.username,
+      password_hash: p.password,
+      work_task_role: p.work_task_role ?? 'employee',
+    })
+  ),
+  updateWorkTaskRole: stubProvider<void, UpdateTeamUserRoleParams>('auth.updateWorkTaskRole', undefined),
+};
+
+export const orgKnowledge = {
+  listDocs: httpGet<OrgKnowledgeDocSummary[], void>('/api/org-knowledge'),
+  getDoc: httpGet<OrgKnowledgeDoc, { slug: string }>((p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}`),
+  listHistory: httpGet<OrgKnowledgeRevisionSummary[], { slug: string }>(
+    (p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}/history`
+  ),
+  updateDoc: httpPut<OrgKnowledgeDoc, { slug: string } & UpdateOrgKnowledgeDocRequest>(
+    (p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}`,
+    (p) => ({
+      title: p.title,
+      content: p.content,
+      expected_version: p.expected_version,
+    })
+  ),
+  revertDoc: httpPost<OrgKnowledgeDoc, { slug: string } & RevertOrgKnowledgeDocRequest>(
+    (p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}/revert`,
+    (p) => ({ target_version: p.target_version })
+  ),
+};
+
+export const workTask = {
+  listTasks: httpGet<WorkTask[], { scope?: WorkTaskScope; status?: WorkTaskStatus }>((p = {}) => {
+    const qs = new URLSearchParams();
+    if (p.scope) qs.set('scope', p.scope);
+    if (p.status) qs.set('status', p.status);
+    const query = qs.toString();
+    return `/api/work-tasks${query ? `?${query}` : ''}`;
+  }),
+  createTask: httpPost<WorkTask, CreateWorkTaskParams>('/api/work-tasks'),
+  getTask: httpGet<WorkTask, { task_id: string }>((p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`),
+  updateTask: httpPut<WorkTask, { task_id: string; updates: UpdateWorkTaskParams }>(
+    (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`,
+    (p) => p.updates
+  ),
+  deleteTask: httpDelete<void, { task_id: string }>((p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`),
+  listMembers: withResponseMap(httpGet<RawAuthUser[], void>('/api/auth/internal/users'), (users) =>
+    users.map(normalizeAuthUser)
+  ),
+  queryTasks: httpGet<WorkTaskQueryResponse, Record<string, never>>('/api/work-tasks/query'),
+  addAttachment: httpPost<WorkTask, AddWorkTaskAttachmentParams>(
+    (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}/attachments`,
+    (p) => ({
+      file_name: p.file_name,
+      file_path: p.file_path,
+      mime_type: p.mime_type,
+      size: p.size ?? 0,
+    })
+  ),
+  removeAttachment: httpDelete<WorkTask, { task_id: string; attachment_id: string }>(
+    (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}/attachments/${encodeURIComponent(p.attachment_id)}`
+  ),
+  onTaskCreated: wsEmitter<WorkTask>('work-task.created'),
+  onTaskUpdated: wsEmitter<WorkTask>('work-task.updated'),
+  onTaskDeleted: wsEmitter<{ task_id: string }>('work-task.deleted'),
+};
 
 export const googleAuth = {
   status: stubProvider<IBridgeResponse<{ account: string }>, { proxy?: string }>('googleAuth.status', {
@@ -1412,6 +1543,10 @@ export interface ICreateConversationParams {
     exclude_auto_inject_skills?: string[];
     preset_context?: string;
     preset_assistant_id?: string;
+    ccb_preferred_model_id?: string;
+    ccb_assistant_profile_id?: string;
+    ccb_agent_id?: string;
+    acp_meta?: Record<string, unknown>;
     selected_mcp_server_ids?: string[];
     selected_session_mcp_servers?: ISessionMcpServer[];
     session_mode?: string;
@@ -1785,6 +1920,19 @@ export const hub = {
 // ---------------------------------------------------------------------------
 
 export type { IAddTeamAgentParams, ICreateTeamParams } from './teamMapper';
+
+// ---------------------------------------------------------------------------
+// CCB-Wanding — electron IPC (main process providers in process/bridge/ccb*Bridge.ts)
+// ---------------------------------------------------------------------------
+
+export {
+  ccbAgentsService,
+  ccbAssistantProfilesService,
+  ccbMcpService,
+  ccbModelService,
+  ccbSkillsService,
+  ccbUpdate,
+} from './ccbIpcBridge';
 
 export const team = {
   create: withResponseMap(

@@ -50,14 +50,14 @@ export function subscribeWarmupConversation(conversation_id: string, listener: (
   };
 }
 
-export function warmupConversation(conversation_id: string): Promise<void> {
+export function warmupConversation(conversation_id: string, options: { force?: boolean } = {}): Promise<void> {
   const existing = warmupByConversation.get(conversation_id);
-  if (existing) {
+  if (existing && !options.force) {
     return existing;
   }
 
   const previous = getWarmupConversationStatus(conversation_id);
-  if (previous.phase === 'ready') {
+  if (previous.phase === 'ready' && !options.force) {
     return Promise.resolve();
   }
   const nextAttempt = previous.attempt + 1;

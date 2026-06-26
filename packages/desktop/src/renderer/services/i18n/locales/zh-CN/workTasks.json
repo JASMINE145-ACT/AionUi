@@ -1,0 +1,83 @@
+{
+  "workTasks": "任务",
+  "roleManager": "管理员",
+  "roleEmployee": "员工",
+  "page": {
+    "title": "任务",
+    "description": "记录与跟踪您的工作任务，支持附件与状态管理。",
+    "newTask": "新建任务",
+    "empty": "暂无任务",
+    "emptyHint": "创建第一个任务，或使用自编译 aioncore 启用落库。",
+    "apiUnavailable": "任务服务未就绪",
+    "apiUnavailableHint": "当前 aioncore 版本不支持工作任务 API。请使用含 aionui-work-tasks 的自编译 aioncore 后重试。",
+    "backToAll": "全部任务",
+    "statusFilter": "按状态筛选",
+    "allStatuses": "全部状态"
+  },
+  "scope": {
+    "visible": "全部",
+    "mine": "我负责的",
+    "assigned": "我分配的",
+    "owned": "我创建的"
+  },
+  "overview": {
+    "title": "团队概览",
+    "total": "共 {{count}} 项",
+    "pending": "待接受 {{count}}",
+    "accepted": "进行中 {{count}}",
+    "completed": "已完成 {{count}}",
+    "overdue": "逾期 {{count}}",
+    "overdueList": "逾期任务"
+  },
+  "card": {
+    "assignee": "执行人：{{name}}",
+    "creator": "指派人：{{name}}",
+    "dueAt": "截止",
+    "overdue": "已逾期"
+  },
+  "action": {
+    "accept": "接受",
+    "complete": "完成"
+  },
+  "status": {
+    "pendingAccept": "未接受",
+    "accepted": "已接受",
+    "completed": "已完成",
+    "incomplete": "未完成",
+    "deferred": "推迟"
+  },
+  "form": {
+    "title": "标题",
+    "titlePlaceholder": "输入任务名称",
+    "description": "描述",
+    "descriptionPlaceholder": "可选描述",
+    "status": "状态",
+    "dueAt": "截止时间",
+    "assignee": "执行人",
+    "assigneeSelf": "我自己",
+    "create": "创建任务",
+    "edit": "编辑任务",
+    "save": "保存",
+    "cancel": "取消"
+  },
+  "detail": {
+    "attachments": "附件",
+    "addAttachment": "添加附件",
+    "noAttachments": "暂无附件",
+    "openAttachment": "打开",
+    "downloadAttachment": "下载",
+    "changeStatus": "更改状态",
+    "delete": "删除任务",
+    "deleteConfirm": "确定删除此任务吗？",
+    "creator": "指派人"
+  },
+  "message": {
+    "createSuccess": "任务已创建",
+    "updateSuccess": "任务已更新",
+    "deleteSuccess": "任务已删除",
+    "attachmentAdded": "附件已添加",
+    "attachmentRemoved": "附件已移除",
+    "openAttachmentFailed": "无法打开附件",
+    "downloadAttachmentFailed": "无法下载附件"
+  }
+}

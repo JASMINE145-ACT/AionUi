@@ -62,6 +62,11 @@ export interface ConversationContextValue {
    * Assistant id bound to this conversation snapshot, if any.
    */
   assistantId?: string;
+
+  /**
+   * Initial model selected when the conversation was created.
+   */
+  initialModelId?: string;
 }
 
 /**

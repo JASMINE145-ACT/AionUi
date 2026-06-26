@@ -6,6 +6,10 @@ export interface NormalizedToolCall {
   key: string;
   name: string;
   status: NormalizedToolStatus;
+  kind?: string;
+  parentToolUseId?: string;
+  isAgentDelegation?: boolean;
+  subagentLabel?: string;
   description?: string;
   input?: string;
   output?: string;
@@ -169,6 +173,20 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
     key: update.tool_call_id,
     name: update.title,
     status: normalizeAcpStatus(update.status),
+    kind: update.kind,
+    parentToolUseId:
+      typeof rawInput?.parent_tool_use_id === 'string'
+        ? rawInput.parent_tool_use_id
+        : typeof rawInput?.parentToolUseId === 'string'
+          ? rawInput.parentToolUseId
+          : undefined,
+    isAgentDelegation: update.title === 'Agent' || rawInput?.subagent_type !== undefined,
+    subagentLabel:
+      typeof rawInput?.subagent_type === 'string'
+        ? rawInput.subagent_type
+        : typeof rawInput?.description === 'string'
+          ? rawInput.description
+          : undefined,
     description: keyParam || (rawInput?.command as string) || update.kind,
     input,
     output,

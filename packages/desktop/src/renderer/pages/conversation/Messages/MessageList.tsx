@@ -302,9 +302,13 @@ const MessageList: React.FC<{
       if (message.hidden) continue;
       if (message.type === 'available_commands') continue;
       // Reset delegation flag at each user turn boundary
-      if (message.type === 'user') seenAgentDelegation = false;
+      if (message.type === 'text' && message.position === 'right') seenAgentDelegation = false;
       // Track agent delegations so we can suppress subagent plan messages even after toolList flushes
-      if (message.type === 'acp_tool_call' && (message as IMessageAcpToolCall).content?.update?.kind === 'agent') {
+      if (
+        message.type === 'acp_tool_call' &&
+        ((message as IMessageAcpToolCall).content?.update?.title === 'Agent' ||
+          (message as IMessageAcpToolCall).content?.update?.rawInput?.subagent_type !== undefined)
+      ) {
         seenAgentDelegation = true;
       }
       // TodoWrite inside a sub-agent (Agent(...) delegation) surfaces as a 'plan'

@@ -12,6 +12,8 @@ export interface GitHubReleaseAsset {
   fallbackUrl?: string;
   size: number;
   contentType?: string;
+  /** Optional SHA-256 checksum used by WanD internal manifests. */
+  sha256?: string;
 }
 
 export interface UpdateReleaseInfo {
@@ -44,6 +46,8 @@ export interface UpdateDownloadRequest {
   /** Fallback URL tried when the primary URL fails (e.g. CDN down). */
   fallbackUrl?: string;
   file_name?: string;
+  /** Expected SHA-256 checksum when the update channel provides one. */
+  expected_sha256?: string;
 }
 
 export interface UpdateDownloadResult {
@@ -87,5 +91,30 @@ export interface AutoUpdateStatus {
   releaseDate?: string;
   releaseNotes?: string;
   progress?: AutoUpdateProgress;
+  error?: string;
+}
+
+/** CCB-Wanding internal update manifest artifact (About → CCB update track). */
+export interface CcbUpdateArtifact {
+  url: string;
+  sha256: string;
+  size: number;
+}
+
+export type CcbUpdateMode = 'hot' | 'full' | 'none';
+
+export interface CcbUpdateCheckResult {
+  installed: string | null;
+  latest: string;
+  updateAvailable: boolean;
+  hotUpdate?: CcbUpdateArtifact;
+  fullInstaller: CcbUpdateArtifact;
+  mode: CcbUpdateMode;
+}
+
+export interface CcbUpdateApplyResult {
+  success: boolean;
+  backupPath?: string;
+  version?: string;
   error?: string;
 }

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { backendFetchCredentials } from '@/common/adapter/httpBridge';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -10,6 +11,7 @@ type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 export interface AuthUser {
   id: string;
   username: string;
+  work_task_role?: 'manager' | 'employee';
 }
 
 interface LoginParams {
@@ -48,6 +50,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const AUTH_USER_ENDPOINT = '/api/auth/user';
 
 const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
+const DESKTOP_DEFAULT_USER: AuthUser = {
+  id: 'system_default_user',
+  username: 'system',
+  work_task_role: 'manager',
+};
 
 // Clear expired auth cache including cookies and localStorage
 // 清除过期的认证缓存，包括 Cookie 和 localStorage
@@ -77,7 +84,7 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   try {
     const response = await fetch(AUTH_USER_ENDPOINT, {
       method: 'GET',
-      credentials: 'include',
+      credentials: backendFetchCredentials(),
       signal,
     });
 
@@ -90,7 +97,10 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
       user?: AuthUser;
     };
     if (data.success && data.user) {
-      return data.user;
+      return {
+        ...data.user,
+        work_task_role: data.user.work_task_role ?? 'manager',
+      };
     }
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
@@ -111,7 +121,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const refresh = useCallback(async () => {
     if (isDesktopRuntime) {
       setStatus('authenticated');
-      setUser(null);
+      setUser(DESKTOP_DEFAULT_USER);
       setReady(true);
       return;
     }
@@ -142,6 +152,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const login = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
     try {
       if (isDesktopRuntime) {
+        setUser(DESKTOP_DEFAULT_USER);
+        setStatus('authenticated');
         setReady(true);
         return { success: true };
       }
@@ -244,7 +256,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const logout = useCallback(async () => {
     if (isDesktopRuntime) {
-      setUser(null);
+      setUser(DESKTOP_DEFAULT_USER);
       setStatus('authenticated');
       setReady(true);
       return;

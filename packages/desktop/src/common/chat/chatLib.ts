@@ -75,6 +75,7 @@ interface IMessage<T extends TMessageType, Content extends Record<string, any>> 
    * 消息来源ID，
    */
   msg_id?: string;
+  turn_id?: string;
 
   //消息会话ID
   conversation_id: string;
@@ -336,6 +337,7 @@ export type IMessagePlan = IMessage<
   {
     session_id: string;
     entries: PlanUpdate['update']['entries'];
+    parentToolUseId?: string;
   }
 >;
 

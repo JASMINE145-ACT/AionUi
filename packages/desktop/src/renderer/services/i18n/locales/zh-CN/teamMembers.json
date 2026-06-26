@@ -1,0 +1,16 @@
+{
+  "title": "团队成员",
+  "subtitle": "创建账号并分配管理员或员工角色。",
+  "username": "用户名",
+  "usernameRequired": "请输入用户名",
+  "initialPassword": "初始密码",
+  "passwordRequired": "请输入密码",
+  "role": "角色",
+  "create": "创建成员",
+  "createSuccess": "成员已创建",
+  "createFailed": "创建成员失败",
+  "loadFailed": "加载成员列表失败",
+  "roleUpdated": "角色已更新",
+  "roleUpdateFailed": "更新角色失败",
+  "lastManager": "不能降级最后一位管理员"
+}

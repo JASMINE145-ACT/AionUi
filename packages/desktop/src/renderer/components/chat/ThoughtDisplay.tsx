@@ -18,6 +18,7 @@ interface ThoughtDisplayProps {
   thought?: ThoughtData;
   style?: 'default' | 'compact';
   running?: boolean;
+  startedAt?: number;
   onStop?: () => void;
 }
 
@@ -29,6 +30,7 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
   thought,
   style = 'default',
   running = false,
+  startedAt,
   onStop: _onStop,
 }) => {
   const { theme } = useThemeContext();
@@ -57,7 +59,7 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
       return;
     }
 
-    startTimeRef.current = Date.now();
+    startTimeRef.current = startedAt ?? Date.now();
     setElapsedTime(0);
 
     const timer = setInterval(() => {
@@ -66,7 +68,7 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [running, thought?.subject]);
+  }, [running, startedAt, thought?.subject]);
 
   // Calculate final style based on theme and style prop
   const containerStyle = useMemo(() => {

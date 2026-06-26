@@ -24,6 +24,9 @@ type UseAcpInitialMessageParams = {
   markSendStarted?: () => void;
   markSendAccepted?: (turn_id: string, runtime: TConversationRuntimeSummary, msg_id?: string) => void;
   markSendFailed?: (reason: string) => void;
+  initialModelId?: string;
+  initialSessionMode?: string;
+  ccbAuthorityActive?: boolean;
   checkAndUpdateTitle: (conversation_id: string, input: string) => void;
   addOrUpdateMessage: (message: TMessage, prepend?: boolean) => void;
 };
@@ -41,6 +44,9 @@ export const useAcpInitialMessage = ({
   markSendStarted,
   markSendAccepted,
   markSendFailed,
+  initialModelId: _initialModelId,
+  initialSessionMode: _initialSessionMode,
+  ccbAuthorityActive: _ccbAuthorityActive,
   checkAndUpdateTitle,
   addOrUpdateMessage,
 }: UseAcpInitialMessageParams): void => {

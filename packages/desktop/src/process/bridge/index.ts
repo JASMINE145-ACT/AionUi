@@ -12,6 +12,12 @@ import { initWindowControlsBridge } from './windowControlsBridge';
 import { initNotificationBridge } from './notificationBridge';
 import { initWebuiBridge } from './webuiBridge';
 import { initThemeBridge } from './themeBridge';
+import { initCcbAgentsBridge } from './ccbAgentsBridge';
+import { initCcbAssistantProfilesBridge } from './ccbAssistantProfilesBridge';
+import { initCcbMcpBridge } from './ccbMcpBridge';
+import { initCcbModelBridge } from './ccbModelBridge';
+import { initCcbSkillsBridge } from './ccbSkillsBridge';
+import { initCcbUpdateBridge } from './ccbUpdateBridge';
 
 export type BridgeDependencies = Record<string, never>;
 
@@ -24,6 +30,12 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initNotificationBridge();
   initWebuiBridge();
   initThemeBridge();
+  initCcbModelBridge();
+  initCcbMcpBridge();
+  initCcbAgentsBridge();
+  initCcbAssistantProfilesBridge();
+  initCcbSkillsBridge();
+  initCcbUpdateBridge();
 }
 
 export {

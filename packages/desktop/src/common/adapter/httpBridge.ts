@@ -6,6 +6,9 @@
  * so existing renderer code works without changes.
  */
 
+import { getSessionToken } from '@/common/auth/authSession';
+import { invalidateAuthSession, shouldInvalidateAuthOnHttp401 } from '@/common/auth/authInvalidation';
+
 // ---------------------------------------------------------------------------
 // Base URL
 // ---------------------------------------------------------------------------
@@ -47,6 +50,10 @@ function getBackendPort(): number {
  */
 function isWebUiBrowserMode(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined' && !(window as Window).__backendPort;
+}
+
+export function backendFetchCredentials(): RequestCredentials {
+  return isWebUiBrowserMode() ? 'include' : 'omit';
 }
 
 export function getBaseUrl(): string {
@@ -183,6 +190,11 @@ export async function httpRequest<T>(
     headers['Content-Type'] = 'application/json';
   }
 
+  const sessionToken = getSessionToken();
+  if (sessionToken) {
+    headers.Authorization = `Bearer ${sessionToken}`;
+  }
+
   console.debug(
     `[httpBridge] ${method} ${path}`,
     body !== undefined ? JSON.stringify(redactForLog(body)).slice(0, 500) : '(no body)'
@@ -192,9 +204,13 @@ export async function httpRequest<T>(
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: backendFetchCredentials(),
   });
 
   if (!response.ok) {
+    if (response.status === 401 && shouldInvalidateAuthOnHttp401(path)) {
+      invalidateAuthSession('http-401');
+    }
     // Response body can only be consumed once — read as text, then try JSON
     const rawText = await response.text().catch(() => '');
     let errorBody: unknown;

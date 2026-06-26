@@ -11,6 +11,8 @@
 // ===== 文件处理相关常量 =====
 
 /** 临时文件时间戳分隔符 */
+export const APP_BRAND_NAME = 'WanD';
+
 export const AIONUI_TIMESTAMP_SEPARATOR = '_aionui_';
 
 /** 用于匹配和清理时间戳后缀的正则表达式 */
