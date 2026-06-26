@@ -94,6 +94,36 @@ export function mergeLoadedChildren(newRes: IDirOrFile[], oldFiles: IDirOrFile[]
 }
 
 /**
+ * Replace children of a directory node identified by relativePath (immutable).
+ * Used by workspace instant refresh when office-watch reports a new file.
+ */
+export function patchDirectoryChildren(
+  tree: IDirOrFile[],
+  targetRelativePath: string,
+  newChildren: IDirOrFile[]
+): IDirOrFile[] {
+  let found = false;
+
+  const visit = (nodes: IDirOrFile[]): IDirOrFile[] =>
+    nodes.map((node) => {
+      if (node.relativePath === targetRelativePath) {
+        found = true;
+        return { ...node, children: newChildren };
+      }
+      if (node.children?.length) {
+        const nextChildren = visit(node.children);
+        if (nextChildren !== node.children) {
+          return { ...node, children: nextChildren };
+        }
+      }
+      return node;
+    });
+
+  const result = visit(tree);
+  return found ? result : [...tree];
+}
+
+/**
  * 获取第一层节点的 keys（用于初始展开）
  * Get first level node keys (for initial expansion)
  */

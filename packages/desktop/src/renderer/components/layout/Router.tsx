@@ -18,6 +18,7 @@ const LoginPage = React.lazy(() => import('@renderer/pages/login'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
+const OrgKnowledgePage = React.lazy(() => import('@renderer/pages/orgKnowledge/OrgKnowledgePage'));
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
@@ -76,6 +77,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
+          <Route path='/org-knowledge' element={withRouteFallback(OrgKnowledgePage)} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

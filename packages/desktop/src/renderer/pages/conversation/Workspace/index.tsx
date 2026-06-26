@@ -29,8 +29,10 @@ import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps';
 import { useWorkspaceModals } from './hooks/useWorkspaceModals';
 import { useWorkspacePaste } from './hooks/useWorkspacePaste';
 import { useAbortUploadsOnConversationChange } from '@/renderer/hooks/file/useAbortUploadsOnConversationChange';
+import { useWorkspaceInstantRefresh } from './hooks/useWorkspaceInstantRefresh';
 import { useWorkspaceSearch } from './hooks/useWorkspaceSearch';
 import { useWorkspaceTree } from './hooks/useWorkspaceTree';
+import { useWorkspaceWatchLifecycle } from './hooks/useWorkspaceWatchLifecycle';
 import type { WorkspaceProps, WorkspaceTab } from './types';
 import {
   computeContextMenuPosition,
@@ -69,6 +71,15 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
   // Initialize all hooks
   const { isWorkspaceCollapsed, setIsWorkspaceCollapsed } = useWorkspaceCollapse();
   const treeHook = useWorkspaceTree({ workspace, conversation_id, eventPrefix });
+
+  useWorkspaceWatchLifecycle({ workspace, conversation_id });
+  useWorkspaceInstantRefresh({
+    workspace,
+    conversation_id,
+    setFiles: treeHook.setFiles,
+    setExpandedKeys: treeHook.setExpandedKeys,
+  });
+
   const modalsHook = useWorkspaceModals();
   const pasteHook = useWorkspacePaste({
     conversation_id: conversation_id,
