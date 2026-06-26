@@ -16,7 +16,9 @@ import { isNewApiPlatform, NEW_API_PROTOCOL_OPTIONS } from '@/renderer/utils/mod
 import EditModeModal from '@/renderer/pages/settings/components/EditModeModal';
 import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import { useProvidersQuery } from '@/renderer/hooks/agent/useModelProviderList';
+import { useCcbAuthorityActive, useCcbModelInfo } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { useSettingsViewMode } from '../settingsViewContext';
+import CcbModelSettingsPanel from './CcbModelSettingsPanel';
 import { consumePendingDeepLink } from '@/renderer/hooks/system/useDeepLink';
 import '../model-provider.css';
 
@@ -92,10 +94,8 @@ const isModelEnabled = (platform: IProvider, model: string): boolean => {
   return platform.model_enabled[model] !== false;
 };
 
-const ModelModalContent: React.FC = () => {
+const UpstreamModelModalContent: React.FC<{ isPageMode: boolean }> = ({ isPageMode }) => {
   const { t } = useTranslation();
-  const viewMode = useSettingsViewMode();
-  const isPageMode = viewMode === 'page';
   const [collapseKey, setCollapseKey] = useState<Record<string, boolean>>({});
   const [healthCheckLoading, setHealthCheckLoading] = useState<Record<string, boolean>>({});
   const { data, mutate } = useProvidersQuery();
@@ -607,6 +607,25 @@ const ModelModalContent: React.FC = () => {
       </AionScrollArea>
     </div>
   );
+};
+
+const ModelModalContent: React.FC = () => {
+  const viewMode = useSettingsViewMode();
+  const isPageMode = viewMode === 'page';
+  const { active: ccbAuthorityActive, isLoading: authorityLoading } = useCcbAuthorityActive();
+  const { modelInfo: ccbModelInfo, isLoading: modelLoading } = useCcbModelInfo(ccbAuthorityActive);
+
+  if (ccbAuthorityActive) {
+    return (
+      <CcbModelSettingsPanel
+        modelInfo={ccbModelInfo}
+        isPageMode={isPageMode}
+        isLoading={authorityLoading || modelLoading || !ccbModelInfo}
+      />
+    );
+  }
+
+  return <UpstreamModelModalContent isPageMode={isPageMode} />;
 };
 
 export default ModelModalContent;

@@ -18,6 +18,7 @@ interface SiderFooterProps {
   collapsed?: boolean;
   theme: string;
   siderTooltipProps: SiderTooltipProps;
+  userChipLabel?: string | null;
   onSettingsClick: () => void;
   onThemeToggle: () => void;
   showLogout?: boolean;
@@ -30,6 +31,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
   collapsed = false,
   theme,
   siderTooltipProps,
+  userChipLabel,
   onSettingsClick,
   onThemeToggle,
   showLogout = false,
@@ -59,6 +61,11 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
 
   return (
     <div className='shrink-0 sider-footer mt-auto pt-8px pb-8px border-t border-solid border-[var(--color-border-2)] border-l-0 border-r-0 border-b-0'>
+      {userChipLabel && !collapsed && (
+        <div className='px-10px pb-6px text-13px font-[500] text-t-secondary truncate' title={userChipLabel}>
+          {userChipLabel}
+        </div>
+      )}
       <div className={classNames('flex', collapsed ? 'flex-col gap-2px' : 'items-center gap-2px')}>
         <Tooltip {...siderTooltipProps} content={isSettings ? t('common.back') : t('common.settings')} position='right'>
           <div

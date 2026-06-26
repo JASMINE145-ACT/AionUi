@@ -14,6 +14,11 @@ export function invalidateAuthSession(reason: AuthInvalidationReason = 'http-401
   clearSessionToken();
   clearOrgSessionToken();
 
+  if (typeof window !== 'undefined') {
+    const api = window as Window & { electronAPI?: { invokeIpc?: (channel: string, data?: unknown) => Promise<unknown> } };
+    void api.electronAPI?.invokeIpc?.('org-auth-write-token', { token: null });
+  }
+
   if (typeof window === 'undefined') {
     return;
   }

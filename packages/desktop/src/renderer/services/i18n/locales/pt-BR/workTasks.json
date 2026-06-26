@@ -1,0 +1,83 @@
+{
+  "workTasks": "Tasks",
+  "roleManager": "Manager",
+  "roleEmployee": "Employee",
+  "page": {
+    "title": "Tasks",
+    "description": "Track your work tasks with attachments and status updates.",
+    "newTask": "New task",
+    "empty": "No tasks yet",
+    "emptyHint": "Create your first task. Persistence requires a self-built aioncore with work-tasks API.",
+    "apiUnavailable": "Task service unavailable",
+    "apiUnavailableHint": "The current aioncore build does not expose /api/work-tasks. Use a self-built aioncore with aionui-work-tasks.",
+    "backToAll": "All tasks",
+    "statusFilter": "Filter by status",
+    "allStatuses": "All statuses"
+  },
+  "scope": {
+    "visible": "All",
+    "mine": "Assigned to me",
+    "assigned": "Assigned by me",
+    "owned": "Created by me"
+  },
+  "overview": {
+    "title": "Team overview",
+    "total": "{{count}} total",
+    "pending": "{{count}} pending",
+    "accepted": "{{count}} in progress",
+    "completed": "{{count}} completed",
+    "overdue": "{{count}} overdue",
+    "overdueList": "Overdue tasks"
+  },
+  "card": {
+    "assignee": "Assignee: {{name}}",
+    "creator": "Creator: {{name}}",
+    "dueAt": "Due",
+    "overdue": "Overdue"
+  },
+  "action": {
+    "accept": "Accept",
+    "complete": "Complete"
+  },
+  "status": {
+    "pendingAccept": "Pending",
+    "accepted": "Accepted",
+    "completed": "Completed",
+    "incomplete": "Incomplete",
+    "deferred": "Deferred"
+  },
+  "form": {
+    "title": "Title",
+    "titlePlaceholder": "Task name",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional description",
+    "status": "Status",
+    "dueAt": "Due date",
+    "assignee": "Assignee",
+    "assigneeSelf": "Myself",
+    "create": "Create task",
+    "edit": "Edit task",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "detail": {
+    "attachments": "Attachments",
+    "addAttachment": "Add attachment",
+    "noAttachments": "No attachments",
+    "openAttachment": "Open",
+    "downloadAttachment": "Download",
+    "changeStatus": "Change status",
+    "delete": "Delete task",
+    "deleteConfirm": "Delete this task?",
+    "creator": "Creator"
+  },
+  "message": {
+    "createSuccess": "Task created",
+    "updateSuccess": "Task updated",
+    "deleteSuccess": "Task deleted",
+    "attachmentAdded": "Attachment added",
+    "attachmentRemoved": "Attachment removed",
+    "openAttachmentFailed": "Failed to open attachment",
+    "downloadAttachmentFailed": "Failed to download attachment"
+  }
+}

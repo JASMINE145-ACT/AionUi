@@ -1,15 +1,17 @@
 import classNames from 'classnames';
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview/context/PreviewContext';
 import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
+import { isDesktopBypassAuth } from '@/common/auth/desktopAuthFlags';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
 import { useAllCronJobs } from '@renderer/pages/cron/useCronJobs';
 import { useTeamCreatedRedirect } from '@renderer/pages/team/hooks/useTeamCreatedRedirect';
-import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderOrgKnowledgeEntry } from './SiderNav';
+import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderOrgKnowledgeEntry, SiderWorkTasksEntry } from './SiderNav';
 import SiderFooter from './SiderFooter';
 import CronJobSiderSection from './CronJobSiderSection';
 import TeamSiderSection from './TeamSiderSection';
@@ -24,6 +26,7 @@ interface SiderProps {
 }
 
 const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
+  const { t } = useTranslation();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const location = useLocation();
@@ -31,15 +34,26 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 
   const navigate = useNavigate();
   const { closePreview } = usePreviewContext();
-  const { logout, status } = useAuth();
+  const { logout, status, user } = useAuth();
   const { theme, setTheme } = useThemeContext();
   const [isBatchMode, setIsBatchMode] = useState(false);
   const { jobs: cronJobs } = useAllCronJobs();
   useTeamCreatedRedirect();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
-  const showLogout =
-    typeof window !== 'undefined' && !(window as { electronAPI?: unknown }).electronAPI && status === 'authenticated';
+  const isDesktop = typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI);
+  const bypassAuth = isDesktop && isDesktopBypassAuth();
+  const showLogout = isDesktop
+    ? !bypassAuth && status === 'authenticated'
+    : !isDesktop && status === 'authenticated';
+
+  const userChipLabel = useMemo(() => {
+    if (!user || bypassAuth || status !== 'authenticated') {
+      return null;
+    }
+    const roleKey = user.work_task_role === 'employee' ? 'workTasks.roleEmployee' : 'workTasks.roleManager';
+    return `${user.username} (${t(roleKey)})`;
+  }, [bypassAuth, status, t, user]);
 
   useEffect(() => {
     if (!pathname.startsWith('/settings')) {
@@ -98,6 +112,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   };
 
+  const handleWorkTasksClick = () => {
+    cleanupSiderTooltips();
+    blurActiveElement();
+    closePreview();
+    setIsBatchMode(false);
+    Promise.resolve(navigate('/tasks')).catch((error) => {
+      console.error('Navigation failed:', error);
+    });
+    if (onSessionClick) {
+      onSessionClick();
+    }
+  };
+
   const handleOrgKnowledgeClick = () => {
     cleanupSiderTooltips();
     blurActiveElement();
@@ -121,6 +148,9 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     closePreview();
     try {
       await logout();
+      Promise.resolve(navigate('/login', { replace: true })).catch((error) => {
+        console.error('Navigation failed:', error);
+      });
     } catch (error) {
       console.error('Logout failed:', error);
       return; // logout 失败时不执行后续操作
@@ -128,7 +158,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     if (onSessionClick) {
       onSessionClick();
     }
-  }, [closePreview, logout, onSessionClick]);
+  }, [closePreview, logout, navigate, onSessionClick]);
 
   useEffect(() => {
     if (!showLogout) return;
@@ -199,6 +229,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleScheduledClick}
             />
+            <SiderWorkTasksEntry
+              isMobile={isMobile}
+              isActive={pathname === '/tasks' || pathname.startsWith('/tasks/')}
+              collapsed={collapsed}
+              siderTooltipProps={siderTooltipProps}
+              onClick={handleWorkTasksClick}
+            />
             <SiderOrgKnowledgeEntry
               isMobile={isMobile}
               isActive={pathname === '/org-knowledge'}
@@ -244,6 +281,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
         collapsed={collapsed}
         theme={theme}
         siderTooltipProps={siderTooltipProps}
+        userChipLabel={userChipLabel}
         onSettingsClick={handleSettingsClick}
         onThemeToggle={handleQuickThemeToggle}
         showLogout={showLogout}

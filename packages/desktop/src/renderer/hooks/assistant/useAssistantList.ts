@@ -1,3 +1,4 @@
+import { ASSISTANTS_LIST_SWR_KEY, fetchAssistantsCatalog } from '@/common/assistants/fetchAssistantsCatalog';
 import { ipcBridge } from '@/common';
 import { resolveLocaleKey } from '@/common/utils';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
@@ -8,6 +9,7 @@ import {
 } from '@/renderer/pages/settings/AssistantSettings/assistantUtils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { mutate as swrMutate } from 'swr';
 
 /**
  * Manages the assistant list: loading from backend, sorting, and tracking the
@@ -23,8 +25,9 @@ export const useAssistantList = () => {
 
   const loadAssistants = useCallback(async () => {
     try {
-      const list = await ipcBridge.assistants.list.invoke();
+      const list = await fetchAssistantsCatalog();
       setAssistants(list);
+      void swrMutate(ASSISTANTS_LIST_SWR_KEY, list, false);
       setActiveAssistantId((prev) => {
         if (prev && list.some((a) => a.id === prev)) return prev;
         return list[0]?.id ?? null;

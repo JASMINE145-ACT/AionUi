@@ -1,8 +1,10 @@
 {
-  "title": "Organization knowledge",
+  "title": "Knowledge base",
   "docTitle": "Wanding Business Knowledge",
   "unconfigured": "ORG_SERVER_URL is not configured. Set the org server URL in the installer or org-server.json.",
   "loginTitle": "Sign in to organization knowledge",
+  "loginRequiredUnified": "Please sign in from the main login screen to access organization knowledge.",
+  "goToLogin": "Go to login",
   "username": "Username",
   "password": "Password",
   "login": "Sign in",

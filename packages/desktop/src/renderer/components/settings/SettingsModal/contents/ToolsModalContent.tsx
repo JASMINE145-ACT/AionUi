@@ -12,7 +12,7 @@ import { type IMcpServer, BUILTIN_IMAGE_GEN_ID, BUILTIN_IMAGE_GEN_NAME } from '@
 import { isImageGenSupported } from '@/common/utils/imageModelAllowlist';
 import { getAgents } from '@/renderer/hooks/agent/useAgents';
 import { Divider, Form, Tooltip, Message, Button, Dropdown, Menu, Modal, Switch } from '@arco-design/web-react';
-import { Help, Down, Plus } from '@icon-park/react';
+import { Help, Down, Plus, LoadingOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useConfigModelListWithImage from '@/renderer/hooks/agent/useConfigModelListWithImage';
@@ -21,6 +21,8 @@ import AionSelect from '@/renderer/components/base/AionSelect';
 import AddMcpServerModal from '@/renderer/pages/settings/components/AddMcpServerModal';
 import McpServerItem from '@/renderer/pages/settings/ToolsSettings/McpServerItem';
 import { useMcpServers, useMcpConnection, useMcpModal, useMcpServerCRUD, useMcpOAuth } from '@/renderer/hooks/mcp';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
+import CcbMcpHealthPanel from '@/renderer/pages/settings/ToolsSettings/CcbMcpHealthPanel';
 import classNames from 'classnames';
 import { useSettingsViewMode } from '../settingsViewContext';
 
@@ -297,7 +299,7 @@ const ModalMcpManagementSection: React.FC<{
   );
 };
 
-const ToolsModalContent: React.FC = () => {
+const UpstreamToolsModalContent: React.FC = () => {
   const { t } = useTranslation();
   const [mcpMessage, mcpMessageContext] = Message.useMessage({ maxCount: 10 });
   const [imageGenerationModel, setImageGenerationModel] = useState<
@@ -637,6 +639,34 @@ const ToolsModalContent: React.FC = () => {
       </AionScrollArea>
     </div>
   );
+};
+
+const ToolsModalContent: React.FC = () => {
+  const viewMode = useSettingsViewMode();
+  const isPageMode = viewMode === 'page';
+  const { active: ccbAuthorityActive, isLoading: authorityLoading } = useCcbAuthorityActive();
+
+  if (ccbAuthorityActive) {
+    return (
+      <div className='flex flex-col h-full w-full'>
+        <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
+          <div className='px-[12px] md:px-[32px] py-[24px]'>
+            <CcbMcpHealthPanel />
+          </div>
+        </AionScrollArea>
+      </div>
+    );
+  }
+
+  if (authorityLoading) {
+    return (
+      <div className='flex flex-col h-full w-full items-center justify-center gap-8px text-13px text-t-secondary py-48px'>
+        <LoadingOne size={20} />
+      </div>
+    );
+  }
+
+  return <UpstreamToolsModalContent />;
 };
 
 export default ToolsModalContent;

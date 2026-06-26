@@ -25,6 +25,7 @@ type AssistantListPanelProps = {
   onToggleEnabled: (assistant: AssistantListItem, checked: boolean) => void;
   onReorder: (activeId: string, overId: string) => void | Promise<void>;
   setActiveAssistantId: (id: string) => void;
+  readOnlyActions?: boolean;
   /** When set, scroll to and highlight the matching assistant card */
   highlightId?: string | null;
   /** Called after the highlight animation completes so the parent can clear the param */
@@ -44,6 +45,7 @@ type SortableAssistantCardProps = {
   renderSourceTag: (assistant: AssistantListItem) => React.ReactNode;
   cardRefSetter: (id: string) => (el: HTMLDivElement | null) => void;
   sortingEnabled: boolean;
+  readOnlyActions: boolean;
 };
 
 const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
@@ -59,6 +61,7 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
   renderSourceTag,
   cardRefSetter,
   sortingEnabled,
+  readOnlyActions,
 }) => {
   const { t } = useTranslation();
   const canDelete = assistant.source === 'user';
@@ -86,6 +89,7 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
       data-testid={`assistant-card-${assistant.id}`}
       className={`group flex cursor-pointer items-center justify-between gap-12px rounded-12px border border-solid px-14px py-10px transition-all duration-180 hover:border-border-1 hover:bg-fill-1 ${highlightedId === assistant.id ? 'border-primary-5 bg-primary-1' : 'border-transparent bg-base'}`}
       onClick={() => {
+        if (readOnlyActions) return;
         setActiveAssistantId(assistant.id);
         onEdit(assistant);
       }}
@@ -123,7 +127,9 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
           size='small'
           data-testid={`switch-enabled-${assistant.id}`}
           checked={assistant.enabled !== false}
+          disabled={readOnlyActions}
           onChange={(checked) => {
+            if (readOnlyActions) return;
             onToggleEnabled(assistant, checked);
           }}
         />
@@ -132,7 +138,9 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
           size='small'
           className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
           data-testid={`btn-edit-${assistant.id}`}
+          disabled={readOnlyActions}
           onClick={() => {
+            if (readOnlyActions) return;
             onEdit(assistant);
           }}
         >
@@ -144,7 +152,9 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
             size='small'
             className='!h-30px !rounded-8px !border-border-2 !bg-base !px-8px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
             data-testid={`btn-duplicate-${assistant.id}`}
+            disabled={readOnlyActions}
             onClick={() => {
+              if (readOnlyActions) return;
               onDuplicate(assistant);
             }}
           >
@@ -158,7 +168,9 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
             status='danger'
             className='!h-30px !rounded-8px !border-danger-2 !bg-base !px-8px !text-12px !font-500'
             data-testid={`btn-delete-${assistant.id}`}
+            disabled={readOnlyActions}
             onClick={() => {
+              if (readOnlyActions) return;
               onDelete(assistant);
             }}
           >
@@ -181,6 +193,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
   onToggleEnabled,
   onReorder,
   setActiveAssistantId,
+  readOnlyActions = false,
   highlightId,
   onHighlightConsumed,
 }) => {
@@ -223,7 +236,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
     return () => clearTimeout(timer);
   }, [highlightId, assistants, onHighlightConsumed]);
   const listAssistants = useMemo(() => assistants, [assistants]);
-  const sortingEnabled = true;
+  const sortingEnabled = !readOnlyActions;
 
   const renderSourceTag = (assistant: AssistantListItem) => {
     if (assistant.source === 'builtin') {
@@ -277,6 +290,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
         renderSourceTag={renderSourceTag}
         cardRefSetter={cardRefSetter}
         sortingEnabled={sortingEnabled}
+        readOnlyActions={readOnlyActions}
       />
     ));
 
@@ -320,6 +334,7 @@ const AssistantListPanel: React.FC<AssistantListPanelProps> = ({
                 icon={<Plus size={14} fill='currentColor' />}
                 onClick={onCreate}
                 data-testid='btn-create-assistant'
+                disabled={readOnlyActions}
               >
                 {t('settings.createAssistant', { defaultValue: 'Create Assistant' })}
               </Button>

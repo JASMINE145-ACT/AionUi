@@ -27,7 +27,8 @@ import { useGuidMention } from './hooks/useGuidMention';
 import { useGuidModelSelection } from './hooks/useGuidModelSelection';
 import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
-import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
+import { loadGuidCapabilitiesCatalog } from './utils/guidCapabilitiesCatalog';
 import { resolveAgentLogo } from '@/renderer/utils/model/agentLogo';
 import { resolveGuidAssistantDefaults } from './utils/assistantDefaults';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
@@ -51,6 +52,7 @@ const GuidPage: React.FC = () => {
   const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
 
   const localeKey = resolveLocaleKey(i18n.language);
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Open external link
@@ -74,30 +76,17 @@ const GuidPage: React.FC = () => {
   const [guidSelectedMcpServerIds, setGuidSelectedMcpServerIds] = useState<string[] | undefined>(undefined);
 
   useEffect(() => {
-    Promise.all([ipcBridge.fs.listBuiltinAutoSkills.invoke(), ipcBridge.fs.listAvailableSkills.invoke()])
-      .then(([autoSkills, availableSkills]) => {
-        const autoNames = new Set(autoSkills.map((s) => s.name));
-        const merged: Array<{ name: string; description: string; isAuto: boolean }> = [
-          ...autoSkills.map((s) => ({ name: s.name, description: s.description, isAuto: true })),
-          ...availableSkills
-            .filter((s) => !autoNames.has(s.name))
-            .map((s) => ({ name: s.name, description: s.description, isAuto: false })),
-        ];
-        setAllSkills(merged);
-      })
-      .catch(() => setAllSkills([]));
-  }, []);
-
-  useEffect(() => {
-    void ensureBackendMcpCatalog()
-      .then(({ allServers }) => {
-        setAvailableMcpServers(allServers);
+    void loadGuidCapabilitiesCatalog()
+      .then(({ skills, mcpServers }) => {
+        setAllSkills(skills);
+        setAvailableMcpServers(mcpServers);
       })
       .catch((error) => {
-        console.error('[GuidPage] Failed to load MCP catalog:', error);
+        console.error('[GuidPage] Failed to load capabilities catalog:', error);
+        setAllSkills([]);
         setAvailableMcpServers([]);
       });
-  }, []);
+  }, [ccbAuthorityActive]);
 
   const handleToggleSkill = useCallback((skillName: string, isAuto: boolean) => {
     if (isAuto) {
@@ -198,6 +187,7 @@ const GuidPage: React.FC = () => {
     assistantDefaultMcpIds: resolvedAssistantDefaults.mcpIds,
     currentEffectiveAgentInfo: agentSelection.currentEffectiveAgentInfo,
     isGoogleAuth: modelSelection.isGoogleAuth,
+    ccbAuthorityActive,
 
     // Mention state reset
     setMentionOpen: mention.setMentionOpen,

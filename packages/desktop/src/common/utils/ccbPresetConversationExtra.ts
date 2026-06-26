@@ -8,8 +8,41 @@
  */
 
 import { ipcBridge } from '@/common';
+import { ccbModelService } from '@/common/adapter/ipcBridge';
 import type { ICreateConversationParams } from '@/common/adapter/ipcBridge';
 import { stripBuiltinAssistantIdPrefix } from '@/common/config/ccbWandingRuntime';
+
+export async function stageCcbAssistantProfileForSession(profileId: string | undefined): Promise<void> {
+  const id = profileId?.trim() ? stripBuiltinAssistantIdPrefix(profileId.trim()) : '';
+  if (!id) return;
+
+  try {
+    await ipcBridge.ccbAssistantProfilesService.stageNextSessionProfile.invoke({ profile_id: id });
+  } catch (error) {
+    console.warn('[stageCcbAssistantProfileForSession] stageNextSessionProfile failed:', {
+      profile_id: id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function stageCcbAssistantProfileFromConversation(conversation_id: string): Promise<void> {
+  const authorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
+  if (!authorityActive) return;
+
+  const conversation = await ipcBridge.conversation.get
+    .invoke({ id: conversation_id })
+    .catch((): null => null);
+  const extra = conversation?.extra as Record<string, unknown> | undefined;
+  if (!extra) return;
+
+  const profileId =
+    (typeof extra.ccb_assistant_profile_id === 'string' && extra.ccb_assistant_profile_id) ||
+    (typeof extra.preset_assistant_id === 'string' && extra.preset_assistant_id) ||
+    undefined;
+
+  await stageCcbAssistantProfileForSession(profileId);
+}
 
 export async function buildCcbPresetConversationExtra(
   profileId: string | undefined,

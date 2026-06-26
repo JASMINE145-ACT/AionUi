@@ -11,6 +11,7 @@ import {
   Info,
   Lightning,
   LinkCloud,
+  Peoples,
   Puzzle,
   Robot,
   Speed,
@@ -22,6 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tooltip } from '@arco-design/web-react';
 import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
+import { useAuth } from '@renderer/hooks/context/AuthContext';
+import { isWorkTaskManager } from '@/common/types/workTasks/workTaskTypes';
 
 /** Builtin settings tab IDs in display order (must match router paths). */
 export const BUILTIN_TAB_IDS = [
@@ -75,6 +78,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const isDesktop = isElectronDesktop();
+  const { user } = useAuth();
+  const showTeamMembers = isWorkTaskManager(user?.work_task_role ?? 'employee');
 
   const extensionTabs = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
@@ -111,6 +116,12 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat />, path: 'pet' },
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
       about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
+      teamMembers: {
+        id: 'team-members',
+        label: t('teamMembers.title', { defaultValue: 'Team members' }),
+        icon: <Peoples />,
+        path: 'team-members',
+      },
     };
 
     // Start with ordered builtin IDs, hiding desktop-only tabs in browser mode
@@ -173,6 +184,12 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       result.splice(insertIdx, 0, ...unanchored.map(toSiderItem));
     }
 
+    if (showTeamMembers) {
+      const systemIdx = result.findIndex((item) => item.id === 'system');
+      const insertIdx = systemIdx >= 0 ? systemIdx : result.length;
+      result.splice(insertIdx, 0, builtinMap.teamMembers);
+    }
+
     // Compute group header render positions.
     //
     // A header must appear before the first *visible* item of its group, which may
@@ -188,7 +205,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     }
 
     return { menus: result, groupHeaderAt: headerAt };
-  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
+  }, [t, isDesktop, extensionTabs, resolveExtTabName, showTeamMembers]);
 
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
   return (

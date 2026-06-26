@@ -20,6 +20,7 @@
 import { Message } from '@arco-design/web-react';
 import coworkSvg from '@/renderer/assets/icons/cowork.svg';
 import { useDetectedAgents, useAssistantEditor, useAssistantList } from '@/renderer/hooks/assistant';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import SettingsPageWrapper from '../components/SettingsPageWrapper';
 import { resolveAvatarImageSrc } from './assistantUtils';
 import AssistantEditorPage from './AssistantEditorPage';
@@ -63,6 +64,7 @@ const AssistantSettings: React.FC = () => {
     reorderAssistants,
     localeKey,
   } = useAssistantList();
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   const builtinAvatarOptions = useMemo(
     () =>
       assistants
@@ -169,6 +171,7 @@ const AssistantSettings: React.FC = () => {
   };
 
   useEffect(() => {
+    if (ccbAuthorityActive) return;
     if (hasConsumedNavigationIntentRef.current) return;
     const openAssistantFromRoute =
       navigationState?.openAssistantEditor && navigationState.openAssistantId ? navigationState.openAssistantId : null;
@@ -200,7 +203,7 @@ const AssistantSettings: React.FC = () => {
       console.error('[AssistantManagement] Failed to clear assistant open intent:', error);
     }
     void editor.handleEdit(targetAssistant);
-  }, [assistants, editor, navigationState]);
+  }, [assistants, ccbAuthorityActive, editor, navigationState]);
 
   return (
     <SettingsPageWrapper className='!h-full !overflow-hidden' contentClassName='!h-full'>
@@ -225,6 +228,7 @@ const AssistantSettings: React.FC = () => {
               onToggleEnabled={(assistant, checked) => void editor.handleToggleEnabled(assistant, checked)}
               onReorder={(activeId, overId) => void reorderAssistants(activeId, overId)}
               setActiveAssistantId={setActiveAssistantId}
+              readOnlyActions={ccbAuthorityActive}
               highlightId={highlightId}
               onHighlightConsumed={handleHighlightConsumed}
             />

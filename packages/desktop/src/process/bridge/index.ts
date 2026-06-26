@@ -18,6 +18,7 @@ import { initCcbMcpBridge } from './ccbMcpBridge';
 import { initCcbModelBridge } from './ccbModelBridge';
 import { initCcbSkillsBridge } from './ccbSkillsBridge';
 import { initCcbUpdateBridge } from './ccbUpdateBridge';
+import './orgServerBridge';
 
 export type BridgeDependencies = Record<string, never>;
 

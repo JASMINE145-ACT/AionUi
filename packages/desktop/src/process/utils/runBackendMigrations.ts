@@ -17,6 +17,19 @@ import {
 import { BUILTIN_IMAGE_GEN_NAME, type IMcpServer, type IProvider } from '@/common/config/storage';
 import { getBuiltinMcpScriptPath, type ProcessConfig as ProcessConfigType } from './initStorage';
 import { migrateAssistantsToBackend } from './migrateAssistants';
+import { migrateAionUiRuntimeConfigToCcb } from '@/common/config/ccbConfigMigration';
+import {
+  migrateAssistantProfilesToCcbAgentsWithFlag,
+  pruneBundledAgentsNotInKeepSetWithFlag,
+  repairAgentMarkdownBomWithFlag,
+  repairExcelCreatorExcelMcpWithFlag,
+  repairGuidCatalogFlagsWithFlag,
+  repairOfficeAgentAgentTypeIdsWithFlag,
+  repairWanDL1SelfContainedWithFlag,
+  repairWanDSubagentMcpServersWithFlag,
+  repairWanDSpecialistGuidCardsWithFlag,
+  repairWordCreatorOfficeWordMcpWithFlag,
+} from '@/common/config/ccbAgentMigration';
 
 type ConfigFile = typeof ProcessConfigType;
 type MigrationStepResult = boolean;
@@ -382,6 +395,46 @@ const MIGRATION_STEPS: Array<{
   { name: 'migrateAssistantsToBackend', run: async (configFile) => migrateAssistantsToBackend(configFile) },
 ];
 
+const CCB_MIGRATION_STEPS: Array<{
+  name: string;
+  run: (configFile: ConfigFile) => Promise<MigrationStepResult>;
+}> = [
+  { name: 'migrateAionUiRuntimeConfigToCcb', run: migrateAionUiRuntimeConfigToCcb },
+  { name: 'migrateAssistantProfilesToCcbAgentsWithFlag', run: migrateAssistantProfilesToCcbAgentsWithFlag },
+  { name: 'repairGuidCatalogFlagsWithFlag', run: repairGuidCatalogFlagsWithFlag },
+  { name: 'pruneBundledAgentsNotInKeepSetWithFlag', run: pruneBundledAgentsNotInKeepSetWithFlag },
+  { name: 'repairWanDSubagentMcpServersWithFlag', run: repairWanDSubagentMcpServersWithFlag },
+  { name: 'repairWanDSpecialistGuidCardsWithFlag', run: repairWanDSpecialistGuidCardsWithFlag },
+  { name: 'repairOfficeAgentAgentTypeIdsWithFlag', run: repairOfficeAgentAgentTypeIdsWithFlag },
+  { name: 'repairWordCreatorOfficeWordMcpWithFlag', run: repairWordCreatorOfficeWordMcpWithFlag },
+  { name: 'repairExcelCreatorExcelMcpWithFlag', run: repairExcelCreatorExcelMcpWithFlag },
+  { name: 'repairWanDL1SelfContainedWithFlag', run: repairWanDL1SelfContainedWithFlag },
+  { name: 'repairAgentMarkdownBomWithFlag', run: repairAgentMarkdownBomWithFlag },
+];
+
+async function runMigrationSteps(
+  steps: Array<{ name: string; run: (configFile: ConfigFile) => Promise<MigrationStepResult> }>,
+  configFile: ConfigFile,
+  logPrefix: string
+): Promise<void> {
+  await steps.reduce<Promise<void>>(async (previous, step) => {
+    await previous;
+    const start = Date.now();
+    try {
+      const completed = await step.run(configFile);
+      const elapsed = Date.now() - start;
+      if (!completed) {
+        console.warn(`[AionUi] ${logPrefix} step incomplete: ${step.name} (${elapsed}ms)`);
+        return;
+      }
+      console.info(`[AionUi] ${logPrefix} step completed: ${step.name} (${elapsed}ms)`);
+    } catch (error) {
+      const elapsed = Date.now() - start;
+      console.error(`[AionUi] ${logPrefix} step failed: ${step.name} (${elapsed}ms)`, error);
+    }
+  }, Promise.resolve());
+}
+
 async function syncBuiltinMcpConfig(configFile: ConfigFile): Promise<void> {
   const localMcpConfig = ((await configFile.get('mcp.config').catch((): IMcpServer[] => [])) || []) as IMcpServer[];
   const localBuiltinServers = localMcpConfig.filter((server) => server?.builtin === true);
@@ -420,22 +473,9 @@ export async function runBackendMigrations(configFile: ConfigFile): Promise<void
     }
   }, Promise.resolve());
 
-  await MIGRATION_STEPS.reduce<Promise<void>>(async (previous, step) => {
-    await previous;
-    const start = Date.now();
-    try {
-      const completed = await step.run(configFile);
-      const elapsed = Date.now() - start;
-      if (!completed) {
-        console.warn(`[AionUi] Backend migration step incomplete: ${step.name} (${elapsed}ms)`);
-        return;
-      }
-      console.info(`[AionUi] Backend migration step completed: ${step.name} (${elapsed}ms)`);
-    } catch (error) {
-      const elapsed = Date.now() - start;
-      console.error(`[AionUi] Backend migration step failed: ${step.name} (${elapsed}ms)`, error);
-    }
-  }, Promise.resolve());
+  await runMigrationSteps(MIGRATION_STEPS, configFile, 'Backend migration');
+
+  await runMigrationSteps(CCB_MIGRATION_STEPS, configFile, 'CCB migration');
 
   const syncStart = Date.now();
   try {

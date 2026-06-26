@@ -1,0 +1,16 @@
+{
+  "title": "Team members",
+  "subtitle": "Create accounts and assign manager or employee roles.",
+  "username": "Username",
+  "usernameRequired": "Username is required",
+  "initialPassword": "Initial password",
+  "passwordRequired": "Password is required",
+  "role": "Role",
+  "create": "Create member",
+  "createSuccess": "Member created",
+  "createFailed": "Failed to create member",
+  "loadFailed": "Failed to load team members",
+  "roleUpdated": "Role updated",
+  "roleUpdateFailed": "Failed to update role",
+  "lastManager": "Cannot demote the last manager"
+}

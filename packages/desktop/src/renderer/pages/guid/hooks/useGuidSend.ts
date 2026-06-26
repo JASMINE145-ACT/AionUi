@@ -5,6 +5,10 @@
  */
 
 import { ipcBridge } from '@/common';
+import {
+  buildCcbPresetConversationExtra,
+  stageCcbAssistantProfileForSession,
+} from '@/common/utils/ccbPresetConversationExtra';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { buildAgentConversationParams } from '@/common/utils/buildAgentConversationParams';
 import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
@@ -59,6 +63,7 @@ export type GuidSendDeps = {
   assistantDefaultMcpIds?: string[];
   currentEffectiveAgentInfo: EffectiveAgentInfo;
   isGoogleAuth: boolean;
+  ccbAuthorityActive: boolean;
 
   // Mention state reset
   setMentionOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -112,6 +117,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     assistantDefaultMcpIds,
     currentEffectiveAgentInfo: _currentEffectiveAgentInfo,
     isGoogleAuth,
+    ccbAuthorityActive,
     setMentionOpen,
     setMentionQuery,
     setMentionSelectorOpen,
@@ -185,6 +191,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       mcp_ids: assistantOverrideMcpIds,
     };
 
+    const ccbPresetExtra = await buildCcbPresetConversationExtra(preset_assistant_id, ccbAuthorityActive);
+
     // Aionrs path (direct selection or preset assistant with aionrs as main agent)
     if (selectedAgent === 'aionrs' || (is_preset && finalEffectiveAgentType === 'aionrs')) {
       if (!current_model) {
@@ -212,12 +220,17 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
             selected_session_mcp_servers: selectedSessionMcpServersToSend,
             session_mode: selectedMode,
+            ...ccbPresetExtra,
           },
         });
 
         if (!conversation || !conversation.id) {
           Message.error(t('conversation.createFailed'));
           return;
+        }
+
+        if (ccbAuthorityActive && preset_assistant_id) {
+          await stageCcbAssistantProfileForSession(preset_assistant_id);
         }
 
         if (isCustomWorkspace) {
@@ -293,6 +306,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
           selected_session_mcp_servers:
             selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
+          ...ccbPresetExtra,
         },
       });
 
@@ -301,6 +315,10 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         if (!conversation || !conversation.id) {
           console.error('Failed to create ACP conversation - conversation object is null or missing id');
           return;
+        }
+
+        if (ccbAuthorityActive && preset_assistant_id) {
+          await stageCcbAssistantProfileForSession(preset_assistant_id);
         }
 
         if (isCustomWorkspace) {
@@ -354,6 +372,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     navigate,
     t,
     localeKey,
+    ccbAuthorityActive,
   ]);
 
   const sendMessageHandler = useCallback(() => {

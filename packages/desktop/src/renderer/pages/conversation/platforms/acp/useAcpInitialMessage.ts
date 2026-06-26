@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import type { TMessage } from '@/common/chat/chatLib';
 import type { TConversationRuntimeSummary } from '@/common/config/storage';
 import { parseError, uuid } from '@/common/utils';
+import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
 import { emitter } from '@/renderer/utils/emitter';
 import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { useEffect } from 'react';
@@ -46,7 +47,7 @@ export const useAcpInitialMessage = ({
   markSendFailed,
   initialModelId: _initialModelId,
   initialSessionMode: _initialSessionMode,
-  ccbAuthorityActive: _ccbAuthorityActive,
+  ccbAuthorityActive,
   checkAndUpdateTitle,
   addOrUpdateMessage,
 }: UseAcpInitialMessageParams): void => {
@@ -70,6 +71,10 @@ export const useAcpInitialMessage = ({
 
         markSendStarted?.();
         setAiProcessing(true);
+
+        if (ccbAuthorityActive) {
+          await warmupConversation(conversation_id);
+        }
 
         void checkAndUpdateTitle(conversation_id, input);
         const result = await ipcBridge.acpConversation.sendMessage.invoke({
@@ -117,6 +122,7 @@ export const useAcpInitialMessage = ({
   }, [
     addOrUpdateMessage,
     backend,
+    ccbAuthorityActive,
     checkAndUpdateTitle,
     conversation_id,
     markSendAccepted,

@@ -43,6 +43,24 @@ export function writeOrgServerUrl(url: string): void {
   fs.writeFileSync(configPath(), JSON.stringify({ url: normalized }, null, 2), 'utf-8');
 }
 
+/**
+ * Seed org-server.json from ORG_SERVER_URL when missing — mirrors installer
+ * first-run behavior so dev launches match packaged desktop config.
+ */
+export function ensureOrgServerJsonFromEnv(): void {
+  const fromEnv = process.env.ORG_SERVER_URL?.trim();
+  if (!fromEnv) {
+    return;
+  }
+
+  const filePath = configPath();
+  if (fs.existsSync(filePath)) {
+    return;
+  }
+
+  writeOrgServerUrl(fromEnv);
+}
+
 export function getOrgSessionTokenFilePath(): string {
   return path.join(getDataPath(), 'org-session.token');
 }

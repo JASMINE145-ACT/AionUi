@@ -6,14 +6,29 @@
 
 import { ipcMain } from 'electron';
 import {
+  ensureOrgServerJsonFromEnv,
   readOrgServerUrl,
   writeOrgServerUrl,
   writeOrgSessionTokenFile,
 } from '@process/utils/orgServerConfig';
 import { writeWandingBusinessKnowledgeShadow } from '@process/utils/orgKnowledgeShadowSync';
 
+ensureOrgServerJsonFromEnv();
+
 ipcMain.on('get-org-server-url', (event) => {
   event.returnValue = readOrgServerUrl();
+});
+
+ipcMain.on('get-sso-mode', (event) => {
+  event.returnValue = (process.env.AIONUI_SSO_MODE ?? '').trim();
+});
+
+ipcMain.on('get-bypass-auth', (event) => {
+  event.returnValue = process.env.AIONUI_BYPASS_AUTH === '1';
+});
+
+ipcMain.on('get-force-relogin', (event) => {
+  event.returnValue = process.env.AIONUI_FORCE_RELOGIN === '1';
 });
 
 ipcMain.handle('org-auth-write-token', (_event, payload: { token?: string | null }) => {

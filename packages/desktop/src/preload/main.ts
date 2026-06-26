@@ -16,6 +16,7 @@ import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
  * @description 注入到renderer进程中, 用于与main进程通信
  * */
 contextBridge.exposeInMainWorld('electronAPI', {
+  invokeIpc: (channel: string, data?: unknown) => ipcRenderer.invoke(channel, data),
   emit: (name: string, data: any) => {
     return ipcRenderer
       .invoke(
@@ -57,6 +58,21 @@ contextBridge.exposeInMainWorld('__backendPort', backendPort > 0 ? backendPort :
 contextBridge.exposeInMainWorld('__initialLanguage', initialLanguage ?? null);
 contextBridge.exposeInMainWorld('__backendStartupFailed', backendStartupFailed === true);
 contextBridge.exposeInMainWorld('__backendStartupFailure', backendStartupFailure ?? null);
+
+// Org center config — same resolution as packaged AionUi (ORG_SERVER_URL env → org-server.json).
+const orgServerUrl = (ipcRenderer.sendSync('get-org-server-url') as string | undefined) ?? '';
+const normalizedOrgServerUrl = orgServerUrl.trim().replace(/\/$/, '');
+contextBridge.exposeInMainWorld('__orgServerUrl', normalizedOrgServerUrl);
+
+// Unified org SSO (ccb-launch / sso.env sets AIONUI_SSO_MODE=org-idp on the main process).
+const ssoMode = (ipcRenderer.sendSync('get-sso-mode') as string | undefined)?.trim() ?? '';
+contextBridge.exposeInMainWorld('__ssoMode', ssoMode || null);
+
+const bypassAuth = ipcRenderer.sendSync('get-bypass-auth') as boolean;
+contextBridge.exposeInMainWorld('__bypassAuth', bypassAuth === true);
+
+const forceRelogin = ipcRenderer.sendSync('get-force-relogin') as boolean;
+contextBridge.exposeInMainWorld('__forceRelogin', forceRelogin === true);
 
 // 托盘事件监听 - 将 IPC 事件转换为 DOM 事件
 // Tray event listeners - convert IPC events to DOM events

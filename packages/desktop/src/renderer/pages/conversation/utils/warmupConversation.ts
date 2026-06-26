@@ -1,4 +1,5 @@
 import { ipcBridge } from '@/common';
+import { stageCcbAssistantProfileFromConversation } from '@/common/utils/ccbPresetConversationExtra';
 
 export type WarmupConversationPhase = 'idle' | 'preparing' | 'ready' | 'error';
 
@@ -66,8 +67,8 @@ export function warmupConversation(conversation_id: string, options: { force?: b
     attempt: nextAttempt,
   });
 
-  const promise = ipcBridge.conversation.warmup
-    .invoke({ conversation_id })
+  const promise = stageCcbAssistantProfileFromConversation(conversation_id)
+    .then(() => ipcBridge.conversation.warmup.invoke({ conversation_id }))
     .then(() => {
       setWarmupStatus(conversation_id, {
         phase: 'ready',

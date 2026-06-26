@@ -5,8 +5,9 @@ import {
   warmupConversation,
 } from '@/renderer/pages/conversation/utils/warmupConversation';
 
-const { warmupInvokeMock } = vi.hoisted(() => ({
+const { warmupInvokeMock, stageFromConversationMock } = vi.hoisted(() => ({
   warmupInvokeMock: vi.fn(),
+  stageFromConversationMock: vi.fn(),
 }));
 
 vi.mock('@/common', () => ({
@@ -19,10 +20,23 @@ vi.mock('@/common', () => ({
   },
 }));
 
+vi.mock('@/common/utils/ccbPresetConversationExtra', () => ({
+  stageCcbAssistantProfileFromConversation: stageFromConversationMock,
+}));
+
 describe('warmupConversation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetWarmupConversationStateForTests();
+    stageFromConversationMock.mockResolvedValue(undefined);
+    warmupInvokeMock.mockResolvedValue(undefined);
+  });
+
+  it('stages CCB profile before warmup invoke', async () => {
+    await warmupConversation('conv-1');
+
+    expect(stageFromConversationMock).toHaveBeenCalledWith('conv-1');
+    expect(warmupInvokeMock).toHaveBeenCalledWith({ conversation_id: 'conv-1' });
   });
 
   it('coalesces concurrent warmups for the same conversation', async () => {
@@ -35,6 +49,7 @@ describe('warmupConversation', () => {
 
     const first = warmupConversation('conv-1');
     const second = warmupConversation('conv-1');
+    await Promise.resolve();
 
     expect(warmupInvokeMock).toHaveBeenCalledTimes(1);
     expect(warmupInvokeMock).toHaveBeenCalledWith({ conversation_id: 'conv-1' });

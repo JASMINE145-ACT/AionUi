@@ -1,5 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { backendFetchCredentials } from '@/common/adapter/httpBridge';
+import { backendFetchCredentials, getBaseUrl } from '@/common/adapter/httpBridge';
+import { performOrgLogin, clearOrgTokenOnDisk } from '@/common/auth/orgAuthLogin';
+import { getSessionToken, setSessionToken } from '@/common/auth/authSession';
+import {
+  AUTH_SESSION_INVALIDATED_EVENT,
+  invalidateAuthSession,
+  type AuthInvalidationReason,
+} from '@/common/auth/authInvalidation';
+import { isDesktopBypassAuth, isDesktopRuntime, shouldForceRelogin } from '@/common/auth/desktopAuthFlags';
+import { isUnifiedOrgSsoEnabled } from '@/common/auth/ssoMode';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -49,7 +58,6 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_USER_ENDPOINT = '/api/auth/user';
 
-const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
 const DESKTOP_DEFAULT_USER: AuthUser = {
   id: 'system_default_user',
   username: 'system',
@@ -82,9 +90,11 @@ function clearAuthCache(): void {
 
 async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> {
   try {
-    const response = await fetch(AUTH_USER_ENDPOINT, {
+    const bearer = getSessionToken();
+    const response = await fetch(`${getBaseUrl()}${AUTH_USER_ENDPOINT}`, {
       method: 'GET',
       credentials: backendFetchCredentials(),
+      headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
       signal,
     });
 
@@ -112,16 +122,44 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   return null;
 }
 
+function applyDesktopBypass(setUser: (u: AuthUser) => void, setStatus: (s: AuthStatus) => void, setReady: (r: boolean) => void) {
+  setStatus('authenticated');
+  setUser(DESKTOP_DEFAULT_USER);
+  setReady(true);
+}
+
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [ready, setReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const forceReloginHandledRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (isDesktopRuntime) {
-      setStatus('authenticated');
-      setUser(DESKTOP_DEFAULT_USER);
+    if (isDesktopRuntime()) {
+      if (isDesktopBypassAuth()) {
+        applyDesktopBypass(setUser, setStatus, setReady);
+        return;
+      }
+
+      if (shouldForceRelogin() && !forceReloginHandledRef.current) {
+        forceReloginHandledRef.current = true;
+        invalidateAuthSession('force-relogin');
+      }
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setStatus('checking');
+
+      const currentUser = await fetchCurrentUser(controller.signal);
+      if (currentUser) {
+        setUser(currentUser);
+        setStatus('authenticated');
+      } else {
+        setUser(null);
+        setStatus('unauthenticated');
+      }
       setReady(true);
       return;
     }
@@ -149,10 +187,77 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     };
   }, [refresh]);
 
+  useEffect(() => {
+    const onInvalidated = (event: Event) => {
+      const reason = (event as CustomEvent<{ reason?: AuthInvalidationReason }>).detail?.reason;
+      if (isDesktopRuntime() && isDesktopBypassAuth() && reason !== 'logout') {
+        return;
+      }
+      setUser(null);
+      setStatus('unauthenticated');
+      setReady(true);
+    };
+    window.addEventListener(AUTH_SESSION_INVALIDATED_EVENT, onInvalidated);
+    return () => window.removeEventListener(AUTH_SESSION_INVALIDATED_EVENT, onInvalidated);
+  }, []);
+
   const login = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
     try {
-      if (isDesktopRuntime) {
-        setUser(DESKTOP_DEFAULT_USER);
+      if (isDesktopRuntime()) {
+        if (isDesktopBypassAuth()) {
+          applyDesktopBypass(setUser, setStatus, setReady);
+          return { success: true };
+        }
+
+        if (isUnifiedOrgSsoEnabled()) {
+          const result = await performOrgLogin({ username, password });
+          if (result.success && result.user) {
+            setUser({
+              id: result.user.id,
+              username: result.user.username,
+              work_task_role: result.user.work_task_role ?? 'employee',
+            });
+            setStatus('authenticated');
+            setReady(true);
+            return { success: true };
+          }
+          return {
+            success: false,
+            message: result.message ?? 'Login failed',
+            code: 'invalidCredentials',
+          };
+        }
+
+        const response = await fetch(`${getBaseUrl()}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: backendFetchCredentials(),
+          body: JSON.stringify({ username, password, remember }),
+        });
+
+        const data = (await response.json()) as {
+          success: boolean;
+          message?: string;
+          user?: AuthUser;
+          token?: string;
+        };
+
+        if (!response.ok || !data.success || !data.user) {
+          let code: LoginErrorCode = 'unknown';
+          if (response.status === 401) code = 'invalidCredentials';
+          else if (response.status === 429) code = 'tooManyAttempts';
+          else if (response.status >= 500) code = 'serverError';
+          return { success: false, message: data.message ?? 'Login failed', code };
+        }
+
+        if (data.token) {
+          setSessionToken(data.token);
+        }
+
+        setUser({
+          ...data.user,
+          work_task_role: data.user.work_task_role ?? 'manager',
+        });
         setStatus('authenticated');
         setReady(true);
         return { success: true };
@@ -255,10 +360,32 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const logout = useCallback(async () => {
-    if (isDesktopRuntime) {
-      setUser(DESKTOP_DEFAULT_USER);
-      setStatus('authenticated');
-      setReady(true);
+    if (isDesktopRuntime()) {
+      if (isDesktopBypassAuth()) {
+        applyDesktopBypass(setUser, setStatus, setReady);
+        return;
+      }
+
+      try {
+        const bearer = getSessionToken();
+        await fetch(`${getBaseUrl()}/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+          },
+          credentials: backendFetchCredentials(),
+          body: JSON.stringify({}),
+        });
+      } catch (error) {
+        console.error('Logout request failed:', error);
+      } finally {
+        await clearOrgTokenOnDisk();
+        invalidateAuthSession('logout');
+        setUser(null);
+        setStatus('unauthenticated');
+        setReady(true);
+      }
       return;
     }
 

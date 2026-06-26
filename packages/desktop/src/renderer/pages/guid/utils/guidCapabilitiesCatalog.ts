@@ -5,6 +5,8 @@
  */
 
 import { ipcBridge } from '@/common';
+import { ccbModelService, ccbMcpService } from '@/common/adapter/ipcBridge';
+import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import type { CcbSkillInfo } from '@/common/config/ccbSkillsShared';
 import type { IMcpServer } from '@/common/config/storage';
 
@@ -15,6 +17,12 @@ export type GuidSkillCatalogItem = {
 };
 
 export type GuidCapabilitiesSource = 'aionui' | 'ccb';
+
+export type GuidCapabilitiesCatalog = {
+  source: GuidCapabilitiesSource;
+  skills: GuidSkillCatalogItem[];
+  mcpServers: IMcpServer[];
+};
 
 export function mapCcbSkillsToGuidCatalog(skills: CcbSkillInfo[]): GuidSkillCatalogItem[] {
   return skills
@@ -55,6 +63,26 @@ export async function loadAionUiGuidSkillsCatalog(): Promise<GuidSkillCatalogIte
         isAuto: false,
       })),
   ];
+}
+
+export async function loadCcbGuidMcpCatalog(): Promise<IMcpServer[]> {
+  return ccbMcpService.listServers.invoke({ test: false });
+}
+
+export async function loadAionUiGuidMcpCatalog(): Promise<IMcpServer[]> {
+  const { allServers } = await ensureBackendMcpCatalog();
+  return allServers;
+}
+
+/** Guid action-row catalog — CCB skills/MCP when authority active, else upstream aioncore corpus. */
+export async function loadGuidCapabilitiesCatalog(): Promise<GuidCapabilitiesCatalog> {
+  const ccbAuthorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
+  if (ccbAuthorityActive) {
+    const [skills, mcpServers] = await Promise.all([loadCcbGuidSkillsCatalog(), loadCcbGuidMcpCatalog()]);
+    return { source: 'ccb', skills, mcpServers };
+  }
+  const [skills, mcpServers] = await Promise.all([loadAionUiGuidSkillsCatalog(), loadAionUiGuidMcpCatalog()]);
+  return { source: 'aionui', skills, mcpServers };
 }
 
 export function resolveEnabledMcpServerIds(servers: IMcpServer[]): string[] {

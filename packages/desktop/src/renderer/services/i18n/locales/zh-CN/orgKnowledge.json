@@ -1,8 +1,10 @@
 {
-  "title": "组织知识库",
+  "title": "知识库",
   "docTitle": "万鼎业务知识库",
   "unconfigured": "未配置 ORG_SERVER_URL。请在安装包或 org-server.json 中设置组织服务器地址。",
   "loginTitle": "登录组织知识库",
+  "loginRequiredUnified": "请从主登录页登录后再访问组织知识库。",
+  "goToLogin": "前往登录",
   "username": "用户名",
   "password": "密码",
   "login": "登录",

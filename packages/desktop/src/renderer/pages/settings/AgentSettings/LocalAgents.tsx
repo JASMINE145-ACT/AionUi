@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
 import AionModal from '@/renderer/components/base/AionModal';
 import { useAgents } from '@/renderer/hooks/agent/useAgents';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { Button, Typography } from '@arco-design/web-react';
 import { Home, Plus } from '@icon-park/react';
 import React, { useCallback, useState } from 'react';
@@ -16,9 +17,10 @@ import { useNavigate } from 'react-router-dom';
 import AgentCard from './AgentCard';
 import { AgentHubModal } from './AgentHubModal';
 import InlineAgentEditor, { type CustomAgentDraft } from './InlineAgentEditor';
+import CcbWandingAgentsPanel from './CcbWandingAgentsPanel';
 import { getAgentKey } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 
-const LocalAgents: React.FC = () => {
+const UpstreamLocalAgents: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [hubModalVisible, setHubModalVisible] = useState(false);
@@ -239,6 +241,25 @@ const LocalAgents: React.FC = () => {
       {hubModalVisible && <AgentHubModal visible={hubModalVisible} onCancel={() => setHubModalVisible(false)} />}
     </div>
   );
+};
+
+const LocalAgents: React.FC = () => {
+  const { t } = useTranslation();
+  const { active: ccbAuthorityActive, isLoading: ccbAuthorityLoading } = useCcbAuthorityActive();
+
+  if (ccbAuthorityActive) {
+    return <CcbWandingAgentsPanel />;
+  }
+
+  if (ccbAuthorityLoading) {
+    return (
+      <Typography.Text type='secondary' className='block px-16px py-16px text-center text-12px'>
+        {t('common.loading', { defaultValue: '加载中…' })}
+      </Typography.Text>
+    );
+  }
+
+  return <UpstreamLocalAgents />;
 };
 
 export default LocalAgents;

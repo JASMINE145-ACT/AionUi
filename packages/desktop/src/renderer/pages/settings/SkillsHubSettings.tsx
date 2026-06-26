@@ -1,4 +1,6 @@
 import { ipcBridge } from '@/common';
+import { ccbSkillsService } from '@/common/adapter/ipcBridge';
+import { fetchSettingsSkillsCatalog, type SettingsSkillInfo } from '@/common/skills/fetchSkillsCatalog';
 import { Button, Message, Modal, Typography } from '@arco-design/web-react';
 import { Delete, FolderOpen, Info, Lightning, Puzzle, Search, Refresh } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
@@ -7,19 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
 
 // Skill 信息类型 / Skill info type
-interface SkillInfo {
-  name: string;
-  description: string;
-  location: string;
-  /**
-   * Relative location under the builtin-skills corpus (e.g.
-   * `auto-inject/cron/SKILL.md`). Present only for `source=builtin`; the
-   * export-to-external-source flow still uses absolute `location` paths.
-   */
-  relative_location?: string;
-  is_custom: boolean;
-  source?: 'builtin' | 'custom' | 'extension';
-}
+type SkillInfo = SettingsSkillInfo;
 
 // Normalize skill name for data-testid usage
 const normalizeTestId = (name: string): string => {
@@ -57,6 +47,7 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
   const [loading, setLoading] = useState(false);
   const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>([]);
   const [skillPaths, setSkillPaths] = useState<{ user_skills_dir: string; builtin_skills_dir: string } | null>(null);
+  const [skillsSource, setSkillsSource] = useState<'ccb' | 'aionui'>('aionui');
   const [search_query, setSearchQuery] = useState('');
   const [builtinAutoSkills, setBuiltinAutoSkills] = useState<Array<{ name: string; description: string }>>([]);
 
@@ -75,14 +66,11 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const skills = await ipcBridge.fs.listAvailableSkills.invoke();
-      setAvailableSkills(skills);
-
-      const paths = await ipcBridge.fs.getSkillPaths.invoke();
-      setSkillPaths(paths);
-
-      const autoSkills = await ipcBridge.fs.listBuiltinAutoSkills.invoke();
-      setBuiltinAutoSkills(autoSkills);
+      const catalog = await fetchSettingsSkillsCatalog();
+      setAvailableSkills(catalog.skills);
+      setSkillPaths(catalog.paths);
+      setBuiltinAutoSkills(catalog.builtinAutoSkills);
+      setSkillsSource(catalog.source);
     } catch (error) {
       console.error('Failed to fetch skills:', error);
       Message.error(t('settings.skillsHub.fetchError', { defaultValue: 'Failed to fetch skills' }));
@@ -115,7 +103,10 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
 
   const handleImport = async (skillPath: string) => {
     try {
-      const result = await ipcBridge.fs.importSkillWithSymlink.invoke({ skill_path: skillPath });
+      const result =
+        skillsSource === 'ccb'
+          ? await ccbSkillsService.importSkill.invoke({ skillPath })
+          : await ipcBridge.fs.importSkillWithSymlink.invoke({ skill_path: skillPath });
       const importedNames = result.skill_names?.length
         ? result.skill_names
         : result.skill_name
@@ -140,7 +131,11 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
 
   const handleDelete = async (skillName: string) => {
     try {
-      await ipcBridge.fs.deleteSkill.invoke({ skill_name: skillName });
+      if (skillsSource === 'ccb') {
+        await ccbSkillsService.deleteSkill.invoke({ skillName });
+      } else {
+        await ipcBridge.fs.deleteSkill.invoke({ skill_name: skillName });
+      }
       Message.success(t('settings.skillsHub.deleteSuccess', { defaultValue: 'Skill deleted' }));
       void fetchData();
     } catch (error) {
@@ -256,6 +251,10 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
                       {skill.source === 'custom' ? (
                         <span className='bg-[rgba(var(--orange-6),0.08)] text-orange-6 border border-[rgba(var(--orange-6),0.2)] text-11px px-6px py-1px rd-4px font-medium'>
                           {t('settings.skillsHub.custom', { defaultValue: 'Custom' })}
+                        </span>
+                      ) : skill.source === 'ccb-wanding' ? (
+                        <span className='bg-[rgba(var(--purple-6),0.08)] text-purple-6 border border-[rgba(var(--purple-6),0.2)] text-11px px-6px py-1px rd-4px font-medium'>
+                          {t('settings.skillsHub.ccbWanding', { defaultValue: 'CCB-Wanding' })}
                         </span>
                       ) : (
                         <span className='bg-[rgba(var(--blue-6),0.08)] text-blue-6 border border-[rgba(var(--blue-6),0.2)] text-11px px-6px py-1px rd-4px font-medium'>
