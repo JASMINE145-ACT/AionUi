@@ -5,6 +5,8 @@
  */
 
 import { ipcBridge } from '@/common';
+import { ccbAgentsService } from '@/common/adapter/ipcBridge';
+import { CCB_DEFAULT_SESSION_AGENT_ID } from '@/common/config/ccbAgentCatalog';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { resolveLocaleKey } from '@/common/utils';
 import type { Assistant, AssistantDetail } from '@/common/types/agent/assistantTypes';
@@ -28,9 +30,17 @@ import { useGuidModelSelection } from './hooks/useGuidModelSelection';
 import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
-import { loadGuidCapabilitiesCatalog } from './utils/guidCapabilitiesCatalog';
+import {
+  loadGuidCapabilitiesCatalog,
+  resolveCcbMcpAllowlistIds,
+  resolveEnabledMcpServerIds,
+  resolveSessionEffectiveMcpServerIds,
+  resolveSessionEffectiveSkillNames,
+  type GuidCapabilitiesSource,
+} from './utils/guidCapabilitiesCatalog';
 import { resolveAgentLogo } from '@/renderer/utils/model/agentLogo';
 import { resolveGuidAssistantDefaults } from './utils/assistantDefaults';
+import { fetchGuidAssistantDetail } from './utils/fetchGuidAssistantDetail';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
 import { appendSpeechTranscript } from '@/renderer/hooks/system/useSpeechInput';
 import { useLiveTranscriptInsertion } from '@/renderer/hooks/system/useLiveTranscriptInsertion';
@@ -74,12 +84,14 @@ const GuidPage: React.FC = () => {
   const [guidEnabledSkills, setGuidEnabledSkills] = useState<string[] | undefined>(undefined);
   const [availableMcpServers, setAvailableMcpServers] = useState<IMcpServer[]>([]);
   const [guidSelectedMcpServerIds, setGuidSelectedMcpServerIds] = useState<string[] | undefined>(undefined);
+  const [capabilitiesSource, setCapabilitiesSource] = useState<GuidCapabilitiesSource>('aionui');
 
   useEffect(() => {
     void loadGuidCapabilitiesCatalog()
-      .then(({ skills, mcpServers }) => {
+      .then(({ skills, mcpServers, source }) => {
         setAllSkills(skills);
         setAvailableMcpServers(mcpServers);
+        setCapabilitiesSource(source);
       })
       .catch((error) => {
         console.error('[GuidPage] Failed to load capabilities catalog:', error);
@@ -140,12 +152,86 @@ const GuidPage: React.FC = () => {
   });
 
   const selectedAssistantId = agentSelection.is_presetAgent ? agentSelection.selectedAgentInfo?.custom_agent_id : null;
-  const { data: selectedAssistantDetail } = useSWR(
-    selectedAssistantId ? `guid.assistant.detail.${selectedAssistantId}.${localeKey}` : null,
+
+  const sessionCcbAgentId = useMemo(() => {
+    if (!agentSelection.ccbAuthorityActive) return undefined;
+    if (agentSelection.is_presetAgent && agentSelection.selectedAgentInfo?.custom_agent_id) {
+      return agentSelection.selectedAgentInfo.custom_agent_id;
+    }
+    return CCB_DEFAULT_SESSION_AGENT_ID;
+  }, [
+    agentSelection.ccbAuthorityActive,
+    agentSelection.is_presetAgent,
+    agentSelection.selectedAgentInfo?.custom_agent_id,
+  ]);
+
+  const { data: sessionAssistantDetail } = useSWR(
+    sessionCcbAgentId
+      ? `guid.session.assistant.${sessionCcbAgentId}.${ccbAuthorityActive ? 'ccb' : localeKey}`
+      : null,
     async (): Promise<AssistantDetail | null> =>
-      ipcBridge.assistants.get
-        .invoke({ id: selectedAssistantId!, locale: localeKey })
-        .catch((_error: unknown): AssistantDetail | null => null)
+      fetchGuidAssistantDetail(sessionCcbAgentId!, {
+        localeKey,
+        ccbAuthorityActive,
+      })
+  );
+
+  const { data: sessionCcbAgent } = useSWR(
+    sessionCcbAgentId && ccbAuthorityActive ? `guid.session.ccbAgent.${sessionCcbAgentId}` : null,
+    async () => ccbAgentsService.getAgent.invoke({ id: sessionCcbAgentId! })
+  );
+
+  const sessionAssistantDefaults = useMemo(
+    () => resolveGuidAssistantDefaults(sessionAssistantDetail),
+    [sessionAssistantDetail]
+  );
+
+  const sessionSkillNames = useMemo(() => {
+    if (capabilitiesSource !== 'ccb') return undefined;
+    const allowlist =
+      sessionAssistantDefaults.skillIds.length > 0
+        ? sessionAssistantDefaults.skillIds
+        : (agentSelection.assistants.find((a) => a.id === sessionCcbAgentId)?.enabled_skills ??
+          sessionCcbAgent?.skills.enabled ??
+          []);
+    return resolveSessionEffectiveSkillNames(
+      allSkills.map((skill) => skill.name),
+      allowlist
+    );
+  }, [
+    capabilitiesSource,
+    sessionAssistantDefaults.skillIds,
+    agentSelection.assistants,
+    sessionCcbAgentId,
+    allSkills,
+    sessionCcbAgent?.skills.enabled,
+  ]);
+
+  const sessionMcpServerIds = useMemo(() => {
+    if (capabilitiesSource !== 'ccb') return undefined;
+    const globalEnabled = guidSelectedMcpServerIds ?? resolveEnabledMcpServerIds(availableMcpServers);
+    const allowlist = resolveCcbMcpAllowlistIds(
+      sessionAssistantDefaults.mcpIds,
+      sessionCcbAgent?.mcp_allowlist
+    );
+    return resolveSessionEffectiveMcpServerIds(availableMcpServers, globalEnabled, allowlist);
+  }, [
+    capabilitiesSource,
+    guidSelectedMcpServerIds,
+    availableMcpServers,
+    sessionAssistantDefaults.mcpIds,
+    sessionCcbAgent?.mcp_allowlist,
+  ]);
+
+  const { data: selectedAssistantDetail } = useSWR(
+    selectedAssistantId
+      ? `guid.assistant.detail.${selectedAssistantId}.${ccbAuthorityActive ? 'ccb' : localeKey}`
+      : null,
+    async (): Promise<AssistantDetail | null> =>
+      fetchGuidAssistantDetail(selectedAssistantId!, {
+        localeKey,
+        ccbAuthorityActive,
+      })
   );
   const resolvedAssistantDefaults = useMemo(
     () => resolveGuidAssistantDefaults(selectedAssistantDetail),
@@ -187,7 +273,7 @@ const GuidPage: React.FC = () => {
     assistantDefaultMcpIds: resolvedAssistantDefaults.mcpIds,
     currentEffectiveAgentInfo: agentSelection.currentEffectiveAgentInfo,
     isGoogleAuth: modelSelection.isGoogleAuth,
-    ccbAuthorityActive,
+    ccbAuthorityActive: agentSelection.ccbAuthorityActive,
 
     // Mention state reset
     setMentionOpen: mention.setMentionOpen,
@@ -704,8 +790,13 @@ const GuidPage: React.FC = () => {
       disabledBuiltinSkills={guidDisabledBuiltinSkills ?? []}
       enabledSkills={guidEnabledSkills ?? []}
       onToggleSkill={handleToggleSkill}
+      capabilitiesSource={capabilitiesSource}
+      skillsReadOnly={agentSelection.ccbAuthorityActive}
       mcpServers={availableMcpServers}
       selectedMcpServerIds={guidSelectedMcpServerIds ?? []}
+      sessionMcpServerIds={sessionMcpServerIds}
+      sessionSkillNames={sessionSkillNames}
+      sessionCcbAgentId={sessionCcbAgentId}
       onToggleMcpServer={handleToggleMcpServer}
       hidePresetTag
       speechInputNode={
@@ -819,6 +910,7 @@ const GuidPage: React.FC = () => {
               getAgentKey={agentSelection.getAgentKey}
               onSelectAgent={handleSelectAgentFromPillBar}
               suppressSelectionAnimation={resetAssistantRequested}
+              ccbAuthorityActive={agentSelection.ccbAuthorityActive}
             />
           ) : null}
 

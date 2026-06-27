@@ -1024,6 +1024,8 @@
     "detectCustomAgent": "Detect Custom Agent",
     "editCustomAgent": "Edit Custom Agent",
     "localAgentsEmpty": "No local agents detected",
+    "wandingLocalAgentsDescription": "WanD uses Claude Code (CCB-Wanding) as the local agent.",
+    "wandingLocalAgentsEmpty": "Claude Code was not detected. Confirm CCB-Wanding is installed and route-b is configured.",
     "detected": "Detected",
     "customAgents": "Custom Agents",
     "custom": "Custom",

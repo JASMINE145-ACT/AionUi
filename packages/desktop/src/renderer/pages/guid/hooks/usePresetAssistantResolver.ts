@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { resolveCcbPresetAgentType } from '@/common/config/ccbWandingRuntime';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { useCallback } from 'react';
 
@@ -17,6 +18,7 @@ type UsePresetAssistantResolverOptions = {
    */
   assistants: Assistant[];
   localeKey: string;
+  ccbAuthorityActive?: boolean;
 };
 
 type UsePresetAssistantResolverResult = {
@@ -46,6 +48,7 @@ type UsePresetAssistantResolverResult = {
 export const usePresetAssistantResolver = ({
   assistants,
   localeKey,
+  ccbAuthorityActive = false,
 }: UsePresetAssistantResolverOptions): UsePresetAssistantResolverResult => {
   const resolvePresetRulesAndSkills = useCallback(
     async (
@@ -86,9 +89,13 @@ export const usePresetAssistantResolver = ({
       if (!agentInfo) return 'gemini';
       if (!agentInfo.custom_agent_id) return agentInfo.backend || agentInfo.agent_type;
       const assistant = assistants.find((a) => a.id === agentInfo.custom_agent_id);
-      return assistant?.preset_agent_type || 'gemini';
+      const presetType = assistant?.preset_agent_type || 'gemini';
+      return resolveCcbPresetAgentType(presetType, {
+        ccbAuthorityActive,
+        isPresetAssistant: true,
+      });
     },
-    [assistants]
+    [assistants, ccbAuthorityActive]
   );
 
   const resolveEnabledSkills = useCallback(

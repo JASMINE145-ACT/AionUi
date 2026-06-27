@@ -9,6 +9,7 @@ import { conversation } from '@/common/adapter/ipcBridge';
 import { Button, Card, Radio, Typography } from '@arco-design/web-react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import './MessageAcpPermission.css';
 
 const { Text } = Typography;
 
@@ -100,25 +101,29 @@ const MessageAcpPermission: React.FC<MessageAcpPermissionProps> = React.memo(({ 
         {!hasResponded && (
           <>
             <div className='mt-10px'>{t('messages.chooseAction')}</div>
-            <Radio.Group direction='vertical' size='mini' value={selected} onChange={setSelected}>
+            <Radio.Group
+              className='message-acp-permission-options'
+              direction='vertical'
+              value={selected}
+              onChange={setSelected}
+            >
               {options && options.length > 0 ? (
                 options.map((option, index) => {
                   const optionName = option?.name || `${t('messages.option')} ${index + 1}`;
                   const option_id = option?.option_id || `option_${index}`;
                   return (
-                    <div key={option_id} data-testid={`message-acp-permission-option-${option_id}`}>
-                      <Radio value={option_id}>{optionName}</Radio>
-                    </div>
+                    <Radio key={option_id} value={option_id} data-testid={`message-acp-permission-option-${option_id}`}>
+                      {optionName}
+                    </Radio>
                   );
                 })
               ) : (
                 <Text type='secondary'>{t('messages.noOptionsAvailable')}</Text>
               )}
             </Radio.Group>
-            <div className='flex justify-start pl-20px'>
+            <div className='flex justify-start mt-2'>
               <Button
                 type='primary'
-                size='mini'
                 disabled={!selected || isResponding}
                 onClick={handleConfirm}
                 data-testid='message-acp-permission-confirm'

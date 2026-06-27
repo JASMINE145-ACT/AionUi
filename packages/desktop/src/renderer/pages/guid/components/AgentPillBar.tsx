@@ -14,6 +14,7 @@ import { Tooltip } from '@arco-design/web-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { filterPillBarAgents } from '../hooks/agentSelectionUtils';
 import styles from '../index.module.css';
 
 type AgentPillBarProps = {
@@ -28,6 +29,8 @@ type AgentPillBarProps = {
   }) => string;
   onSelectAgent: (key: string) => void;
   suppressSelectionAnimation?: boolean;
+  /** When CCB authority is active, oracle filters to Claude execution engine only. */
+  ccbAuthorityActive?: boolean;
 };
 
 const AgentPillBar: React.FC<AgentPillBarProps> = ({
@@ -36,11 +39,21 @@ const AgentPillBar: React.FC<AgentPillBarProps> = ({
   getAgentKey,
   onSelectAgent,
   suppressSelectionAnimation = false,
+  ccbAuthorityActive = false,
 }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  const pillAgents = React.useMemo(() => {
+    const engines = ccbAuthorityActive
+      ? filterPillBarAgents(availableAgents)
+      : availableAgents.filter((agent) => !agent.is_preset);
+    return engines;
+  }, [availableAgents, ccbAuthorityActive]);
+
+  if (pillAgents.length === 0) return null;
 
   return (
     <div className='w-full flex justify-center'>
@@ -62,8 +75,7 @@ const AgentPillBar: React.FC<AgentPillBarProps> = ({
           color: 'var(--text-primary)',
         }}
       >
-        {availableAgents
-          .filter((agent) => !agent.is_preset)
+        {pillAgents
           .map((agent, index) => {
             const isSelected = selectedAgentKey === getAgentKey(agent);
             const extensionAvatar = resolveExtensionAssetUrl(agent.isExtension ? agent.avatar : undefined);

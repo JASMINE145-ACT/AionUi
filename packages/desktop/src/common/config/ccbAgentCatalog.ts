@@ -23,9 +23,7 @@ export const CCB_WANDING_KEEP_AGENT_IDS = new Set([
   'wande-orchestrator',
   'quotation-agent',
   'accurate-agent',
-  'cowork',
   'word-creator',
-  'word-form-creator',
   'ppt-creator',
   'excel-creator',
 ]);
@@ -35,9 +33,7 @@ export const CCB_GUID_HIDDEN_AGENT_IDS = new Set(['wande-orchestrator']);
 
 /** Office Guid presets — also delegatable from default router */
 export const CCB_WANDING_OFFICE_PRESET_IDS = new Set([
-  'cowork',
   'word-creator',
-  'word-form-creator',
   'ppt-creator',
   'excel-creator',
 ]);

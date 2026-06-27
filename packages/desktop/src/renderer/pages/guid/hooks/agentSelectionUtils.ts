@@ -5,7 +5,31 @@
  */
 
 import { configService } from '@/common/config/configService';
-import type { AgentSource } from '@/renderer/utils/model/agentTypes';
+import type { AgentMetadata, AgentSource } from '@/renderer/utils/model/agentTypes';
+
+/** WanD / CCB Guid execution engine backend (oracle agentSelectionUtils). */
+export const CCB_EXECUTION_ENGINE_BACKEND = 'claude' as const;
+
+type ExecutionEngineAgentLike = {
+  is_preset?: boolean;
+  backend?: string;
+  agent_type: string;
+};
+
+/** Non-preset Claude Code ACP row — pill bar + Settings → Agents oracle filter. */
+export function isCcbExecutionEngineAgent(agent: ExecutionEngineAgentLike): boolean {
+  return !agent.is_preset && (agent.backend || agent.agent_type) === CCB_EXECUTION_ENGINE_BACKEND;
+}
+
+export function filterPillBarAgents<T extends ExecutionEngineAgentLike>(agents: T[]): T[] {
+  return agents.filter(isCcbExecutionEngineAgent);
+}
+
+export function findCcbClaudeAgent<T extends ExecutionEngineAgentLike>(
+  agents: AgentMetadata[] | T[] | undefined
+): T | undefined {
+  return agents?.find(isCcbExecutionEngineAgent) as T | undefined;
+}
 
 /** Save preferred mode to the agent's own config key */
 export async function savePreferredMode(agentKey: string, mode: string): Promise<void> {

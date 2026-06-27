@@ -237,8 +237,8 @@ body`,
         guid_primary: true,
       });
       await saveCcbAgent({
-        id: 'cowork',
-        name: 'Cowork',
+        id: 'ppt-creator',
+        name: 'PPT',
         model: null,
         permission_mode: null,
         recommended_prompts: [],
@@ -251,9 +251,9 @@ body`,
       });
 
       const { repaired } = await repairGlobalRouterCatalog(dir);
-      expect(repaired.sort()).toEqual(['cowork', 'wande-orchestrator']);
+      expect(repaired.sort()).toEqual(['ppt-creator', 'wande-orchestrator']);
       expect((await getCcbAgent('wande-orchestrator'))?.guid_primary).toBe(false);
-      expect((await getCcbAgent('cowork'))?.delegatable).toBe(true);
+      expect((await getCcbAgent('ppt-creator'))?.delegatable).toBe(true);
     });
   });
 

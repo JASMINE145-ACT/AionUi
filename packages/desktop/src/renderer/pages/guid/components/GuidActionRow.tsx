@@ -14,11 +14,13 @@ import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import type { AvailableAgent } from '../types';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import type { GuidCapabilitiesSource } from '../utils/guidCapabilitiesCatalog';
 import PresetAgentTag, { type AgentSwitcherItem } from './PresetAgentTag';
 import { Button, Checkbox, Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { ArrowUp, Lightning, Plus, Shield, UploadOne } from '@icon-park/react';
 import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import styles from '../index.module.css';
 
 type GuidActionRowProps = {
@@ -55,8 +57,13 @@ type GuidActionRowProps = {
   disabledBuiltinSkills: string[];
   enabledSkills: string[];
   onToggleSkill: (name: string, isAuto: boolean) => void;
+  capabilitiesSource?: GuidCapabilitiesSource;
+  skillsReadOnly?: boolean;
   mcpServers: IMcpServer[];
   selectedMcpServerIds: string[];
+  sessionMcpServerIds?: string[];
+  sessionSkillNames?: string[];
+  sessionCcbAgentId?: string;
   onToggleMcpServer: (serverId: string) => void;
 
   // Send button
@@ -86,8 +93,13 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
   disabledBuiltinSkills,
   enabledSkills,
   onToggleSkill,
+  capabilitiesSource = 'aionui',
+  skillsReadOnly = false,
   mcpServers,
   selectedMcpServerIds,
+  sessionMcpServerIds,
+  sessionSkillNames,
+  sessionCcbAgentId,
   onToggleMcpServer,
   hidePresetTag = false,
   loading,
@@ -96,12 +108,29 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
   onSend,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
   const modeBackend = effectiveModeAgent || selectedAgent;
   const showModeSwitch = supportsModeSwitch(modeBackend);
   const configOptionCount = (modelSelectorNode ? 1 : 0) + (showModeSwitch ? 1 : 0);
+  const isCcbCapabilities = capabilitiesSource === 'ccb';
+
+  const openMcpSettings = useCallback(() => {
+    navigate('/settings/capabilities?tab=tools');
+  }, [navigate]);
+
+  const openSkillsSettings = useCallback(() => {
+    navigate('/settings/capabilities?tab=skills');
+  }, [navigate]);
+
+  const openAgentSettings = useCallback(() => {
+    const agentId = sessionCcbAgentId?.trim();
+    navigate(
+      agentId ? `/settings/assistants?highlight=${encodeURIComponent(agentId)}` : '/settings/assistants'
+    );
+  }, [navigate, sessionCcbAgentId]);
 
   // Browser file picker ref (WebUI only)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,10 +163,35 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
   const isWebUI = !isElectronDesktop();
 
   const isSkillChecked = (skill: { name: string; isAuto: boolean }) =>
-    skill.isAuto ? !disabledBuiltinSkills.includes(skill.name) : enabledSkills.includes(skill.name);
+    isCcbCapabilities
+      ? (sessionSkillNames?.some((name) => name.toLowerCase() === skill.name.toLowerCase()) ?? false)
+      : skill.isAuto
+        ? !disabledBuiltinSkills.includes(skill.name)
+        : enabledSkills.includes(skill.name);
 
-  const activeSkillCount = allSkills.filter(isSkillChecked).length;
-  const activeMcpCount = selectedMcpServerIds.length;
+  const activeSkillCount = isCcbCapabilities
+    ? (sessionSkillNames?.length ?? 0)
+    : allSkills.filter(isSkillChecked).length;
+  const activeMcpCount = isCcbCapabilities
+    ? (sessionMcpServerIds?.length ?? 0)
+    : selectedMcpServerIds.length;
+
+  const skillsMenuTitle = isCcbCapabilities
+    ? t('conversation.welcome.ccbSkillsSessionMenu', { defaultValue: '本会话技能' })
+    : t('settings.capabilitiesTab.skills');
+  const skillsMenuCount = isCcbCapabilities
+    ? activeSkillCount > 0
+      ? `（${activeSkillCount}）`
+      : ''
+    : `(${activeSkillCount}/${allSkills.length})`;
+  const mcpMenuTitle = isCcbCapabilities
+    ? t('conversation.welcome.ccbMcpSessionMenu', { defaultValue: '本会话 MCP' })
+    : t('mcp.label');
+  const mcpMenuCount = isCcbCapabilities
+    ? activeMcpCount > 0
+      ? `（${activeMcpCount}）`
+      : ''
+    : `(${activeMcpCount}/${mcpServers.length})`;
 
   const menuContent = (
     <Menu
@@ -156,6 +210,12 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             });
         } else if (key === 'device') {
           fileInputRef.current?.click();
+        } else if (key === 'ccb-open-mcp-settings') {
+          openMcpSettings();
+        } else if (key === 'ccb-open-skills-settings') {
+          openSkillsSettings();
+        } else if (key === 'ccb-open-agent-settings') {
+          openAgentSettings();
         }
       }}
     >
@@ -182,14 +242,14 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
           </div>
         </Menu.Item>
       )}
-      {allSkills.length > 0 && (
+      {allSkills.length > 0 || isCcbCapabilities ? (
         <Menu.SubMenu
           key='skills'
           title={
             <div className='flex items-center gap-8px'>
               <Lightning theme='filled' size='16' fill={iconColors.primary} style={{ lineHeight: 0 }} />
               <span>
-                {t('settings.capabilitiesTab.skills')} ({activeSkillCount}/{allSkills.length})
+                {skillsMenuTitle} {skillsMenuCount}
               </span>
             </div>
           }
@@ -201,33 +261,87 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             },
           }}
         >
-          {allSkills.map((skill) => (
-            <Menu.Item
-              key={`skill-${skill.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSkill(skill.name, skill.isAuto);
-              }}
-            >
-              <Checkbox
-                checked={isSkillChecked(skill)}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                onChange={() => onToggleSkill(skill.name, skill.isAuto)}
-              >
-                <span className='text-13px'>{skill.name}</span>
-              </Checkbox>
+          {allSkills.length === 0 ? (
+            <Menu.Item key='skills-empty' disabled>
+              <span className='text-13px text-t-secondary'>
+                {t('conversation.welcome.ccbSkillsEmpty', {
+                  defaultValue: 'No CCB-Wanding skills yet. Import them in Settings → Skills Hub.',
+                })}
+              </span>
             </Menu.Item>
-          ))}
+          ) : isCcbCapabilities ? (
+            <>
+              {(sessionSkillNames?.length ?? 0) === 0 ? (
+                <Menu.Item key='skills-session-empty' disabled className='!cursor-default'>
+                  <span className='text-13px text-t-secondary'>
+                    {t('conversation.welcome.ccbSkillsSessionEmptyShort', {
+                      defaultValue: '当前 Agent 未启用技能',
+                    })}
+                  </span>
+                </Menu.Item>
+              ) : (
+                allSkills
+                  .filter((skill) => isSkillChecked(skill))
+                  .map((skill) => (
+                    <Menu.Item
+                      key={`skill-session-${skill.name}`}
+                      disabled
+                      className='!cursor-default'
+                    >
+                      <span className='text-13px'>{skill.name}</span>
+                    </Menu.Item>
+                  ))
+              )}
+              <Menu.Item key='ccb-open-skills-settings'>
+                <span className='text-13px text-t-secondary'>
+                  {t('conversation.welcome.ccbOpenSkillsSettings', {
+                    defaultValue: '管理技能安装 → 设置',
+                  })}
+                </span>
+              </Menu.Item>
+              <Menu.Item key='ccb-open-agent-settings'>
+                <span className='text-13px text-t-secondary'>
+                  {t('conversation.welcome.ccbOpenAgentSettings', {
+                    defaultValue: '配置本会话 Agent → 助手',
+                  })}
+                </span>
+              </Menu.Item>
+            </>
+          ) : (
+            allSkills.map((skill) => (
+              <Menu.Item
+                key={`skill-${skill.name}`}
+                disabled={skillsReadOnly}
+                onClick={(e) => {
+                  if (skillsReadOnly) return;
+                  e.stopPropagation();
+                  onToggleSkill(skill.name, skill.isAuto);
+                }}
+              >
+                <Checkbox
+                  checked={isSkillChecked(skill)}
+                  disabled={skillsReadOnly}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  onChange={() => {
+                    if (!skillsReadOnly) onToggleSkill(skill.name, skill.isAuto);
+                  }}
+                >
+                  <span className='text-13px'>{skill.name}</span>
+                </Checkbox>
+              </Menu.Item>
+            ))
+          )}
         </Menu.SubMenu>
-      )}
-      {mcpServers.length > 0 && (
+      ) : null}
+      {mcpServers.length > 0 || isCcbCapabilities ? (
         <Menu.SubMenu
           key='mcp'
           title={
             <div className='flex items-center gap-8px'>
               <Shield theme='outline' size='16' fill={iconColors.primary} style={{ lineHeight: 0 }} />
               <span>
-                {t('mcp.label')} ({activeMcpCount}/{mcpServers.length})
+                {mcpMenuTitle}
+                {mcpMenuCount}
               </span>
             </div>
           }
@@ -239,28 +353,57 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             },
           }}
         >
-          {mcpServers.map((server) => (
-            <Menu.Item
-              key={`mcp-${server.id}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleMcpServer(server.id);
-              }}
-            >
-              <Checkbox
-                checked={selectedMcpServerIds.includes(server.id)}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                onChange={() => onToggleMcpServer(server.id)}
-              >
-                <span className='text-13px'>
-                  {server.name}
-                  {server.tools?.length ? ` (${server.tools.length} ${t('mcp.tools')})` : ''}
+          {isCcbCapabilities ? (
+            <>
+              {(sessionMcpServerIds?.length ?? 0) === 0 ? (
+                <Menu.Item key='mcp-session-empty' disabled className='!cursor-default'>
+                  <span className='text-13px text-t-secondary'>
+                    {t('conversation.welcome.ccbMcpSessionEmptyShort', {
+                      defaultValue: '当前 Agent 无直接 MCP（全局路由将自动委派子助手）',
+                    })}
+                  </span>
+                </Menu.Item>
+              ) : (
+                mcpServers
+                  .filter((server) => sessionMcpServerIds?.includes(server.id))
+                  .map((server) => (
+                    <Menu.Item key={`mcp-session-${server.id}`} disabled className='!cursor-default'>
+                      <span className='text-13px'>{server.name}</span>
+                    </Menu.Item>
+                  ))
+              )}
+              <Menu.Item key='ccb-open-mcp-settings'>
+                <span className='text-13px text-t-secondary'>
+                  {t('conversation.welcome.ccbOpenMcpSettings', {
+                    defaultValue: '管理 MCP → 设置',
+                  })}
                 </span>
-              </Checkbox>
-            </Menu.Item>
-          ))}
+              </Menu.Item>
+            </>
+          ) : (
+            mcpServers.map((server) => (
+              <Menu.Item
+                key={`mcp-${server.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleMcpServer(server.id);
+                }}
+              >
+                <Checkbox
+                  checked={selectedMcpServerIds.includes(server.id)}
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  onChange={() => onToggleMcpServer(server.id)}
+                >
+                  <span className='text-13px'>
+                    {server.name}
+                    {server.tools?.length ? ` (${server.tools.length} ${t('mcp.tools')})` : ''}
+                  </span>
+                </Checkbox>
+              </Menu.Item>
+            ))
+          )}
         </Menu.SubMenu>
-      )}
+      ) : null}
     </Menu>
   );
 

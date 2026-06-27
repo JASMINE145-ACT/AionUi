@@ -83,8 +83,6 @@ export const CCB_MCP_HEALTH_MANIFEST: {
     'accurate-agent': { required_mcp: ['accurate'] },
     'word-creator': { required_mcp: ['office-word'] },
     'excel-creator': { required_mcp: ['excel'] },
-    'word-form-creator': { required_mcp: [], skills: ['officecli-word-form'], optional: true },
-    cowork: { required_mcp: [], optional: true },
     'ppt-creator': { required_mcp: [], skills: ['ppt-master'], optional: true },
   },
 };

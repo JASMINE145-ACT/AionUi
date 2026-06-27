@@ -21,6 +21,7 @@ import { migrateAionUiRuntimeConfigToCcb } from '@/common/config/ccbConfigMigrat
 import {
   migrateAssistantProfilesToCcbAgentsWithFlag,
   pruneBundledAgentsNotInKeepSetWithFlag,
+  pruneBundledAgentsNotInKeepSetV2WithFlag,
   repairAgentMarkdownBomWithFlag,
   repairExcelCreatorExcelMcpWithFlag,
   repairGuidCatalogFlagsWithFlag,
@@ -403,6 +404,7 @@ const CCB_MIGRATION_STEPS: Array<{
   { name: 'migrateAssistantProfilesToCcbAgentsWithFlag', run: migrateAssistantProfilesToCcbAgentsWithFlag },
   { name: 'repairGuidCatalogFlagsWithFlag', run: repairGuidCatalogFlagsWithFlag },
   { name: 'pruneBundledAgentsNotInKeepSetWithFlag', run: pruneBundledAgentsNotInKeepSetWithFlag },
+  { name: 'pruneBundledAgentsNotInKeepSetV2WithFlag', run: pruneBundledAgentsNotInKeepSetV2WithFlag },
   { name: 'repairWanDSubagentMcpServersWithFlag', run: repairWanDSubagentMcpServersWithFlag },
   { name: 'repairWanDSpecialistGuidCardsWithFlag', run: repairWanDSpecialistGuidCardsWithFlag },
   { name: 'repairOfficeAgentAgentTypeIdsWithFlag', run: repairOfficeAgentAgentTypeIdsWithFlag },

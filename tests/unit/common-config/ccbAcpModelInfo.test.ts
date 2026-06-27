@@ -94,8 +94,8 @@ describe('ccbAcpModelInfo', () => {
       'minimax-m3-thinking'
     );
     expect(resolveCcbNewConversationPreferredModelIdForAgent('accurate-agent', undefined)).toBe('minimax-m3');
-    expect(resolveCcbNewConversationPreferredModelIdForAgent('cowork', undefined)).toBe('minimax-m3-thinking');
-    expect(resolveCcbNewConversationPreferredModelIdForAgent('cowork', 'minimax-m3-thinking')).toBe(
+    expect(resolveCcbNewConversationPreferredModelIdForAgent('ppt-creator', undefined)).toBe('minimax-m3-thinking');
+    expect(resolveCcbNewConversationPreferredModelIdForAgent('ppt-creator', 'minimax-m3-thinking')).toBe(
       'minimax-m3-thinking'
     );
   });

@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { ccbModelService, ccbMcpService } from '@/common/adapter/ipcBridge';
+import { ccbMcpIdFromName } from '@/common/config/ccbAssistantCatalog';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import type { CcbSkillInfo } from '@/common/config/ccbSkillsShared';
 import type { IMcpServer } from '@/common/config/storage';
@@ -123,4 +124,10 @@ export function resolveSessionEffectiveSkillNames(
   if (skillsAllowlist.length === 0) return [];
   const allowed = new Set(skillsAllowlist.map((name) => name.trim().toLowerCase()));
   return catalogSkillNames.filter((name) => allowed.has(name.trim().toLowerCase()));
+}
+
+/** Prefer resolved assistant detail; fall back to raw CCB agent sidecar allowlist. */
+export function resolveCcbMcpAllowlistIds(detailMcpIds: string[], agentMcpAllowlist?: string[]): string[] {
+  if (detailMcpIds.length > 0) return detailMcpIds;
+  return (agentMcpAllowlist ?? []).map(ccbMcpIdFromName);
 }

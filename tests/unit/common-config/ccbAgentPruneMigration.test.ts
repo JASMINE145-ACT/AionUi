@@ -61,16 +61,17 @@ describe('pruneBundledAgentsNotInKeepSet', () => {
     writeWandingInstallMarker(configDir);
 
     await saveCcbAgent(agentInput('cowork', 'bundled'));
+    await saveCcbAgent(agentInput('word-creator', 'bundled'));
     await saveCcbAgent(agentInput('game-3d', 'bundled'));
     await saveCcbAgent(agentInput('my-custom', 'user'));
 
     const report = await pruneBundledAgentsNotInKeepSet(configDir);
-    expect(report?.agents_deleted).toEqual(['game-3d']);
-    expect(report?.agents_skipped.some((item) => item.id === 'cowork' && item.reason === 'in_keep_set')).toBe(true);
+    expect(report?.agents_deleted.sort()).toEqual(['cowork', 'game-3d']);
+    expect(report?.agents_skipped.some((item) => item.id === 'word-creator' && item.reason === 'in_keep_set')).toBe(true);
     expect(report?.agents_skipped.some((item) => item.id === 'my-custom' && item.reason === 'not_bundled')).toBe(true);
 
     const { listCcbAgents } = await import('@/common/config/ccbAgents');
     const remaining = (await listCcbAgents()).map((agent) => agent.id).sort();
-    expect(remaining).toEqual(['cowork', 'my-custom']);
+    expect(remaining).toEqual(['my-custom', 'word-creator']);
   });
 });

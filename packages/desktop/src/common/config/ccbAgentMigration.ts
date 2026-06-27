@@ -25,6 +25,8 @@ import { isCcbWandingInstallPresent } from './ccbWandingRuntimeNode';
 export const CCB_AGENTS_UNIFIED_FLAG = 'migration.ccbAgentsUnified_v1' as const;
 export const CCB_AGENTS_GUID_CATALOG_FLAG = 'migration.ccbAgentsGuidCatalog_v1' as const;
 export const CCB_WANDING_PRUNE_PRESETS_FLAG = 'migration.ccbWandingPrunePresets_v1' as const;
+/** Re-run keep-set prune after removing agents from CCB_WANDING_KEEP_AGENT_IDS (2026-06-27: cowork, word-form-creator) */
+export const CCB_WANDING_PRUNE_PRESETS_V2_FLAG = 'migration.ccbWandingPrunePresets_v2' as const;
 export const CCB_WANDING_MCP_SERVERS_FLAG = 'migration.ccbWandingMcpServers_v1' as const;
 export const CCB_WANDING_OFFICE_DELEGATABLE_FLAG = 'migration.ccbWandingOfficeDelegatable_v1' as const;
 export const CCB_WANDING_GLOBAL_ROUTER_FLAG = 'migration.ccbWandingGlobalRouter_v1' as const;
@@ -42,7 +44,6 @@ export const CCB_WANDING_L1_SELF_CONTAINED_FLAG = 'migration.ccbWandingL1SelfCon
 const OFFICE_AGENT_DISPLAY_NAMES: Record<string, string> = {
   'word-creator': 'Word 文档助手',
   'ppt-creator': 'PPT 演示助手',
-  'word-form-creator': '可填表单助手',
   'excel-creator': 'Excel 表格助手',
 };
 
@@ -377,6 +378,45 @@ export async function pruneBundledAgentsNotInKeepSetWithFlag(configFile: ConfigF
     return success;
   } catch (error) {
     console.error('[Migration] CCB WanD preset prune failed', error);
+    return false;
+  }
+}
+
+export async function pruneBundledAgentsNotInKeepSetV2WithFlag(configFile: ConfigFile): Promise<boolean> {
+  const configDir = resolveCcbClaudeConfigDir();
+  if (!configDir || !isCcbWandingInstallPresent(configDir)) {
+    return true;
+  }
+
+  let flagged = false;
+  try {
+    flagged = Boolean(await configFile.get(CCB_WANDING_PRUNE_PRESETS_V2_FLAG));
+  } catch {
+    flagged = false;
+  }
+  if (flagged) {
+    return true;
+  }
+
+  try {
+    const report = await pruneBundledAgentsNotInKeepSet(configDir);
+    if (!report) {
+      return false;
+    }
+    const success = report.agents_failed.length === 0;
+    if (success) {
+      await configFile.set(CCB_WANDING_PRUNE_PRESETS_V2_FLAG, true);
+    }
+    console.info(
+      '[Migration] CCB WanD preset prune v2 %s: deleted=%d skipped=%d failed=%d',
+      success ? 'completed' : 'partial',
+      report.agents_deleted.length,
+      report.agents_skipped.length,
+      report.agents_failed.length
+    );
+    return success;
+  } catch (error) {
+    console.error('[Migration] CCB WanD preset prune v2 failed', error);
     return false;
   }
 }

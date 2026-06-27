@@ -9,6 +9,7 @@ import type { CcbSkillInfo } from '@/common/config/ccbSkillsShared';
 import type { IMcpServer } from '@/common/config/storage';
 import {
   mapCcbSkillsToGuidCatalog,
+  resolveCcbMcpAllowlistIds,
   resolveEnabledMcpServerIds,
   resolveSessionEffectiveMcpServerIds,
   resolveSessionEffectiveSkillNames,
@@ -127,5 +128,13 @@ describe('guidCapabilitiesCatalog', () => {
     expect(resolveSessionEffectiveSkillNames(['officecli-docx', 'cron'], ['officecli-docx'])).toEqual([
       'officecli-docx',
     ]);
+  });
+
+  it('falls back to agent sidecar MCP allowlist when detail is empty', () => {
+    expect(resolveCcbMcpAllowlistIds([], ['quotation', 'excel'])).toEqual([
+      'ccb-mcp:quotation',
+      'ccb-mcp:excel',
+    ]);
+    expect(resolveCcbMcpAllowlistIds(['ccb-mcp:accurate'], ['quotation'])).toEqual(['ccb-mcp:accurate']);
   });
 });

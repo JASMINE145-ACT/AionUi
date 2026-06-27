@@ -20,7 +20,7 @@ describe('filterGuidCatalogAgents', () => {
   it('hides default router only; shows WanD specialists and office bundled presets', () => {
     const filtered = filterGuidCatalogAgents([
       agent({ id: 'wande-orchestrator', name: 'Router', source: 'bundled', guid_primary: true }),
-      agent({ id: 'cowork', name: 'Cowork', source: 'bundled' }),
+      agent({ id: 'ppt-creator', name: 'PPT', source: 'bundled' }),
       agent({ id: 'quotation-agent', name: 'quotation-agent', source: 'bundled', guid_primary: true }),
       agent({ id: 'accurate-agent', name: 'accurate-agent', source: 'bundled' }),
       agent({ id: 'word-creator', name: 'Word', source: 'bundled' }),
@@ -29,7 +29,7 @@ describe('filterGuidCatalogAgents', () => {
     ]);
 
     expect(filtered.map((item) => item.id)).toEqual([
-      'cowork',
+      'ppt-creator',
       'quotation-agent',
       'accurate-agent',
       'word-creator',

@@ -5,7 +5,13 @@
  */
 
 import type { IProvider, TProviderWithModel } from '@/common/config/storage';
+import {
+  mergeCcbMiniMaxAcpModelInfo,
+  preserveCcbUserModelSelection,
+  resolveCcbAuthorityAcpModelInfo,
+} from '@/common/config/ccbAcpModelInfo';
 import { iconColors } from '@/renderer/styles/colors';
+import { useCcbAuthorityActive, useCcbModelInfo } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { getModelDisplayLabel } from '@/renderer/utils/model/agentLogo';
 import type { AcpModelInfo } from '../types';
 import { getAvailableModels } from '../utils/modelUtils';
@@ -41,6 +47,21 @@ const GuidModelSelector: React.FC<GuidModelSelectorProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const defaultModelLabel = t('common.defaultModel');
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
+  const { modelInfo: ccbModelInfo } = useCcbModelInfo(ccbAuthorityActive || !isGeminiMode);
+
+  const mergedAcpModelInfo = React.useMemo(() => {
+    const resolved =
+      resolveCcbAuthorityAcpModelInfo(currentAcpCachedModelInfo, ccbModelInfo) ??
+      mergeCcbMiniMaxAcpModelInfo(currentAcpCachedModelInfo, ccbModelInfo) ??
+      currentAcpCachedModelInfo;
+    if (!resolved) return null;
+    return preserveCcbUserModelSelection(resolved, currentAcpCachedModelInfo, selectedAcpModel);
+  }, [ccbModelInfo, currentAcpCachedModelInfo, selectedAcpModel]);
+
+  const hasSwitchableVariants =
+    (ccbModelInfo?.available_variants?.length ?? 0) > 1 ||
+    (mergedAcpModelInfo?.available_models?.length ?? 0) > 1;
 
   // 获取模型配置数据（包含健康状态）
   const { data: modelConfig } = useProvidersQuery();
@@ -66,26 +87,26 @@ const GuidModelSelector: React.FC<GuidModelSelectorProps> = ({
 
   const acpSelectedLabel = React.useMemo(() => {
     return (
-      currentAcpCachedModelInfo?.available_models?.find((m) => m.id === selectedAcpModel)?.label ||
-      currentAcpCachedModelInfo?.current_model_label ||
-      currentAcpCachedModelInfo?.current_model_id ||
+      mergedAcpModelInfo?.available_models?.find((m) => m.id === selectedAcpModel)?.label ||
+      mergedAcpModelInfo?.current_model_label ||
+      mergedAcpModelInfo?.current_model_id ||
       ''
     );
   }, [
-    currentAcpCachedModelInfo?.available_models,
-    currentAcpCachedModelInfo?.current_model_id,
-    currentAcpCachedModelInfo?.current_model_label,
+    mergedAcpModelInfo?.available_models,
+    mergedAcpModelInfo?.current_model_id,
+    mergedAcpModelInfo?.current_model_label,
     selectedAcpModel,
   ]);
 
   const acpButtonLabel = React.useMemo(() => {
     return getModelDisplayLabel({
-      selected_value: selectedAcpModel || currentAcpCachedModelInfo?.current_model_id,
+      selected_value: selectedAcpModel || mergedAcpModelInfo?.current_model_id,
       selectedLabel: acpSelectedLabel,
       defaultModelLabel,
       fallbackLabel: defaultModelLabel,
     });
-  }, [acpSelectedLabel, currentAcpCachedModelInfo?.current_model_id, defaultModelLabel, selectedAcpModel]);
+  }, [acpSelectedLabel, mergedAcpModelInfo?.current_model_id, defaultModelLabel, selectedAcpModel]);
 
   if (isGeminiMode) {
     return (
@@ -183,15 +204,40 @@ const GuidModelSelector: React.FC<GuidModelSelectorProps> = ({
     );
   }
 
+  // CCB authority: read-only label when only one WanD variant (oracle GuidModelSelector)
+  if (ccbModelInfo && !hasSwitchableVariants && !isGeminiMode) {
+    return (
+      <Tooltip content={t('settings.ccbModelAuthorityNote')} position='top'>
+        <Button
+          className='sendbox-model-btn guid-config-btn'
+          shape='round'
+          size='small'
+          data-testid='guid-model-selector'
+          style={{ cursor: 'default' }}
+          onClick={() => navigate('/settings/model')}
+        >
+          <span className='flex items-center gap-6px min-w-0'>
+            <Brain theme='outline' size='14' fill={iconColors.secondary} className='shrink-0' />
+            <span>{ccbModelInfo.model_label}</span>
+          </span>
+        </Button>
+      </Tooltip>
+    );
+  }
+
   // ACP cached model selector
-  if (currentAcpCachedModelInfo && currentAcpCachedModelInfo.available_models?.length > 0) {
-    if (currentAcpCachedModelInfo.available_models.length > 0) {
+  if (
+    mergedAcpModelInfo &&
+    mergedAcpModelInfo.available_models?.length > 0 &&
+    (!isGeminiMode || ccbAuthorityActive)
+  ) {
+    if (mergedAcpModelInfo.available_models.length > 0) {
       return (
         <Dropdown
           trigger='click'
           droplist={
             <Menu selectedKeys={selectedAcpModel ? [selectedAcpModel] : []}>
-              {currentAcpCachedModelInfo.available_models.map((model) => {
+              {mergedAcpModelInfo.available_models.map((model) => {
                 // 获取模型健康状态
                 const providerConfig = modelConfig?.find((p) => p.platform?.includes(''));
                 const healthStatus = providerConfig?.model_health?.[model.id]?.status || 'unknown';

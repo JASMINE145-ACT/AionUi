@@ -1,0 +1,28 @@
+/* Restore Arco radio layout inside permission cards (retro-windows theme forces 13×13 globally). */
+.message-acp-permission-options .arco-radio {
+  width: auto;
+  height: auto;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  appearance: unset;
+  -webkit-appearance: unset;
+  -moz-appearance: unset;
+}
+
+.message-acp-permission-options .arco-radio:checked::after {
+  content: none;
+}
+
+.message-acp-permission-options .arco-radio-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.message-acp-permission-options .arco-radio-text {
+  white-space: normal;
+  word-break: break-word;
+}

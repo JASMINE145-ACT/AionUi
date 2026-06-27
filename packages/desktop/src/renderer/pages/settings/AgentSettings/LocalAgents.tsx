@@ -17,8 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import AgentCard from './AgentCard';
 import { AgentHubModal } from './AgentHubModal';
 import InlineAgentEditor, { type CustomAgentDraft } from './InlineAgentEditor';
-import CcbWandingAgentsPanel from './CcbWandingAgentsPanel';
-import { getAgentKey } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
+import { findCcbClaudeAgent, getAgentKey } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 
 const UpstreamLocalAgents: React.FC = () => {
   const { t } = useTranslation();
@@ -243,12 +242,42 @@ const UpstreamLocalAgents: React.FC = () => {
   );
 };
 
+/** Oracle 1.1.2 LocalAgents — single detected Claude Code card (index-DA53d_yj.js). */
+const CcbLocalAgents: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { agents: allAgents } = useAgents();
+  const claudeAgent = findCcbClaudeAgent(allAgents);
+
+  const goToChat = useCallback(() => {
+    if (!claudeAgent) return;
+    navigate('/guid', { state: { selectedAgentKey: getAgentKey(claudeAgent) } });
+  }, [claudeAgent, navigate]);
+
+  return (
+    <div className='flex flex-col gap-8px py-16px'>
+      <div className='px-16px text-12px text-t-secondary'>
+        {t('settings.agentManagement.wandingLocalAgentsDescription')}
+      </div>
+      {claudeAgent ? (
+        <div className='px-16px mt-8px max-w-240px'>
+          <AgentCard type='detected' agent={claudeAgent} onGoToChat={goToChat} />
+        </div>
+      ) : (
+        <Typography.Text type='secondary' className='block px-16px py-16px text-center text-12px'>
+          {t('settings.agentManagement.wandingLocalAgentsEmpty')}
+        </Typography.Text>
+      )}
+    </div>
+  );
+};
+
 const LocalAgents: React.FC = () => {
   const { t } = useTranslation();
   const { active: ccbAuthorityActive, isLoading: ccbAuthorityLoading } = useCcbAuthorityActive();
 
   if (ccbAuthorityActive) {
-    return <CcbWandingAgentsPanel />;
+    return <CcbLocalAgents />;
   }
 
   if (ccbAuthorityLoading) {

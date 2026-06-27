@@ -1025,6 +1025,8 @@
     "detectCustomAgent": "识别自定义 Agent",
     "editCustomAgent": "编辑自定义 Agent",
     "localAgentsEmpty": "未检测到本地 Agent",
+    "wandingLocalAgentsDescription": "WanD 使用 Claude Code（CCB-Wanding）作为本地 Agent。",
+    "wandingLocalAgentsEmpty": "未检测到 Claude Code。请确认 CCB-Wanding 已安装并完成 route-b 配置。",
     "detected": "已检测",
     "customAgents": "自定义 Agents",
     "custom": "自定义",

@@ -18,9 +18,15 @@ import {
   type AgentSource,
 } from '@/renderer/utils/model/agentTypes';
 import { getAgentModes } from '@/renderer/utils/model/agentModes';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
-import { savePreferredMode, savePreferredModelId, getAgentKey as getAgentKeyUtil } from './agentSelectionUtils';
+import {
+  findCcbClaudeAgent,
+  getAgentKey as getAgentKeyUtil,
+  savePreferredMode,
+  savePreferredModelId,
+} from './agentSelectionUtils';
 import { usePresetAssistantResolver } from './usePresetAssistantResolver';
 import { useAgentAvailability } from './useAgentAvailability';
 import { useCustomAgentsLoader } from './useCustomAgentsLoader';
@@ -73,6 +79,7 @@ export type GuidAgentSelectionResult = {
   ) => EffectiveAgentInfo;
   refreshCustomAgents: () => Promise<void>;
   customAgentAvatarMap: Map<string, string | undefined>;
+  ccbAuthorityActive: boolean;
 };
 
 /**
@@ -126,6 +133,7 @@ export const useGuidAgentSelection = ({
   preselectAgentKey,
   locationKey,
 }: UseGuidAgentSelectionOptions): GuidAgentSelectionResult => {
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   const [selectedAgentKey, _setSelectedAgentKey] = useState<string>(() => {
     try {
       return configService.get('guid.lastSelectedAgent') || 'aionrs';
@@ -211,7 +219,7 @@ export const useGuidAgentSelection = ({
     resolvePresetAgentType,
     resolveEnabledSkills,
     resolveDisabledBuiltinSkills,
-  } = usePresetAssistantResolver({ assistants, localeKey });
+  } = usePresetAssistantResolver({ assistants, localeKey, ccbAuthorityActive });
 
   const { isMainAgentAvailable, getEffectiveAgentType } = useAgentAvailability({
     modelList,
@@ -335,15 +343,15 @@ export const useGuidAgentSelection = ({
       // New Chat keeps the last-used CLI agent.
       const currentIsPreset = selectedAgentKey.startsWith('custom:');
       if (currentIsPreset) {
-        const firstCliAgent = availableAgents.find((a) => !a.is_preset);
-        const fallbackKey = firstCliAgent ? getAgentKey(firstCliAgent) : 'aionrs';
+        const claudeAgent = findCcbClaudeAgent(availableAgents);
+        const fallbackKey = claudeAgent ? getAgentKey(claudeAgent) : 'claude';
         _setSelectedAgentKey(fallbackKey);
         configService.set('guid.lastSelectedAgent', fallbackKey).catch((error) => {
           console.error('Failed to save reset agent key:', error);
         });
       }
     }
-  }, [availableAgents, resetAssistant, preselectAgentKey, locationKey]);
+  }, [availableAgents, resetAssistant, preselectAgentKey, locationKey, ccbAuthorityActive, selectedAgentKey, getAgentKey]);
 
   // Load last selected agent when no explicit reset was requested.
   useEffect(() => {
@@ -375,7 +383,12 @@ export const useGuidAgentSelection = ({
           }
         }
 
-        // No saved preference or stale key — default to first detected engine
+        // No saved preference or stale key — default to CCB Claude or first engine
+        if (ccbAuthorityActive) {
+          const claudeAgent = findCcbClaudeAgent(availableAgents);
+          _setSelectedAgentKey(claudeAgent ? getAgentKey(claudeAgent) : 'claude');
+          return;
+        }
         const firstAgent = availableAgents[0];
         if (firstAgent) {
           _setSelectedAgentKey(getAgentKey(firstAgent));
@@ -390,7 +403,7 @@ export const useGuidAgentSelection = ({
     return () => {
       cancelled = true;
     };
-  }, [availableAgents, resetAssistant, preselectAgentKey, locationKey]);
+  }, [availableAgents, resetAssistant, preselectAgentKey, locationKey, ccbAuthorityActive, getAgentKey]);
 
   const currentEffectiveAgentInfo = useMemo(() => {
     if (!is_presetAgent) {
@@ -521,9 +534,13 @@ export const useGuidAgentSelection = ({
 
   // Key of the first non-preset CLI agent (used as fallback when leaving preset mode)
   const defaultAgentKey = useMemo(() => {
+    if (ccbAuthorityActive) {
+      const claudeAgent = findCcbClaudeAgent(availableAgents);
+      return claudeAgent ? getAgentKey(claudeAgent) : 'claude';
+    }
     const firstCliAgent = availableAgents?.find((a) => !a.is_preset);
     return firstCliAgent ? getAgentKey(firstCliAgent) : 'aionrs';
-  }, [availableAgents]);
+  }, [availableAgents, ccbAuthorityActive]);
 
   return {
     selectedAgentKey,
@@ -552,5 +569,6 @@ export const useGuidAgentSelection = ({
     getEffectiveAgentType,
     refreshCustomAgents,
     customAgentAvatarMap,
+    ccbAuthorityActive,
   };
 };
