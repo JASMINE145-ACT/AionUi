@@ -8,6 +8,10 @@ export type CcbMcpHealthServerSpec = {
   optional?: boolean;
   required_paths?: string[];
   tool_prefix?: string;
+  probe_tool_call?: {
+    tool: string;
+    arguments?: Record<string, unknown>;
+  };
 };
 
 export type CcbMcpHealthAgentSpec = {
@@ -30,8 +34,13 @@ export const CCB_MCP_HEALTH_MANIFEST: {
         'vendor/mcp-servers/quotation-server/dist/index.js',
         'vendor/python-wanding/python.exe',
         'vendor/wanding/data',
+        'vendor/wanding/python/main.py',
       ],
       tool_prefix: 'mcp__quotation__',
+      probe_tool_call: {
+        tool: 'match_quotation',
+        arguments: { keywords: 'pipe', showAllCandidates: true },
+      },
     },
     accurate: {
       kind: 'stdio' as const,

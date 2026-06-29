@@ -64,7 +64,7 @@ const OrgKnowledgePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { configured, orgStatus, orgUser, orgLogin } = useOrgAuth();
-  const { data: doc, mutate: mutateDoc } = useOrgKnowledgeDoc(WANDING_BUSINESS_KNOWLEDGE_SLUG);
+  const { data: doc, error: docError, isLoading: docLoading, mutate: mutateDoc } = useOrgKnowledgeDoc(WANDING_BUSINESS_KNOWLEDGE_SLUG);
   const { data: history, mutate: mutateHistory } = useOrgKnowledgeHistory(WANDING_BUSINESS_KNOWLEDGE_SLUG);
   const [editorContent, setEditorContent] = useState('');
   const [loginUser, setLoginUser] = useState('');
@@ -215,7 +215,27 @@ const OrgKnowledgePage: React.FC = () => {
       )}
 
       {/* Editor area */}
-      {doc ? (
+      {docLoading ? (
+        <div className='flex-1 flex items-center justify-center'>
+          <Spin />
+        </div>
+      ) : docError ? (
+        <Alert
+          className='flex-shrink-0'
+          type='error'
+          title={t('orgKnowledge.loadFailed', '无法加载知识库文档')}
+          content={
+            isBackendHttpError(docError) && docError.status === 404
+              ? t(
+                  'orgKnowledge.loadFailed404',
+                  '组织服务器未提供该文档 API（404）。请确认 VPS aioncore 已部署含 aionui-org-knowledge 的自编译版本并重试。'
+                )
+              : docError instanceof Error
+                ? docError.message
+                : String(docError)
+          }
+        />
+      ) : doc ? (
         <TextArea
           className='flex-1 font-mono text-13px'
           style={{ resize: 'none' }}

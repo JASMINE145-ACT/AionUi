@@ -11,6 +11,7 @@ import { bridge } from '@office-ai/platform';
 import type { CcbAgentInput, CcbAgentRecord } from '../config/ccbAgents';
 import type { CcbAssistantProfile, CcbAssistantProfileInput } from '../config/ccbAssistantProfiles';
 import type { CcbMcpHealthRepairResult, CcbMcpHealthReport } from '../config/ccbMcpHealth';
+import type { CcbStartupReadinessStatus } from '../config/ccbStartupReadinessShared';
 import type { CcbMcpHealthRepairActionId } from '../config/ccbMcpHealthDiagnosis';
 import type { CcbModelInfo } from '../config/ccbModelSettingsShared';
 import type { CcbSkillImportResult, CcbSkillInfo, CcbSkillPaths } from '../config/ccbSkillsShared';
@@ -41,6 +42,8 @@ export const ccbMcpService = {
   repairHealth: bridge.buildProvider<CcbMcpHealthRepairResult, { actionIds?: CcbMcpHealthRepairActionId[] }>(
     'ccb.mcp.repairHealth'
   ),
+  getStartupReadiness: bridge.buildProvider<CcbStartupReadinessStatus, void>('ccb.mcp.getStartupReadiness'),
+  ensureStartupReadiness: bridge.buildProvider<CcbStartupReadinessStatus, void>('ccb.mcp.ensureStartupReadiness'),
 };
 
 export const ccbAgentsService = {

@@ -9,11 +9,19 @@ describe('ccbMcpHealth config layer', () => {
     const agentsDir = join(configDir, 'agents');
     mkdirSync(agentsDir, { recursive: true });
 
+    const wandingRoot = mkdtempSync(join(tmpdir(), 'ccb-wanding-'));
+    mkdirSync(join(wandingRoot, 'python'), { recursive: true });
+    writeFileSync(join(wandingRoot, 'python', 'main.py'), '# probe stub\n', 'utf8');
+
     writeFileSync(
       join(configDir, 'settings.json'),
       JSON.stringify({
         mcpServers: {
-          quotation: { command: 'node', args: ['q.js'] },
+          quotation: {
+            command: 'node',
+            args: ['q.js'],
+            env: { CCB_PROJECT_ROOT: wandingRoot },
+          },
           accurate: { command: 'python', args: ['a.py'] },
           'office-word': { command: 'python', args: ['w.py'] },
           excel: { command: 'python', args: ['e.py'] },
@@ -48,6 +56,9 @@ describe('ccbMcpHealth config layer', () => {
       const report = await runCcbMcpHealthCheck({ probe: false });
       expect(report.config.ok).toBe(true);
       expect(report.config.items.some((item) => item.id === 'mcp:quotation' && item.ok)).toBe(true);
+      expect(
+        report.config.items.some((item) => item.id === 'quotation.env.CCB_PROJECT_ROOT' && item.ok)
+      ).toBe(true);
       expect(report.config.items.some((item) => item.id === 'word-creator' && item.ok)).toBe(true);
     } finally {
       if (previous === undefined) {

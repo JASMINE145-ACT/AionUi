@@ -30,6 +30,8 @@ import { useGuidModelSelection } from './hooks/useGuidModelSelection';
 import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
+import { useCcbStartupReadiness } from '@/renderer/hooks/agent/useCcbStartupReadiness';
+import CcbStartupReadinessBanner from '@/renderer/components/ccb/CcbStartupReadinessBanner';
 import {
   loadGuidCapabilitiesCatalog,
   resolveCcbMcpAllowlistIds,
@@ -63,6 +65,7 @@ const GuidPage: React.FC = () => {
 
   const localeKey = resolveLocaleKey(i18n.language);
   const { active: ccbAuthorityActive } = useCcbAuthorityActive();
+  const startupReadiness = useCcbStartupReadiness();
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Open external link
@@ -274,6 +277,7 @@ const GuidPage: React.FC = () => {
     currentEffectiveAgentInfo: agentSelection.currentEffectiveAgentInfo,
     isGoogleAuth: modelSelection.isGoogleAuth,
     ccbAuthorityActive: agentSelection.ccbAuthorityActive,
+    startupReadinessCanSend: startupReadiness.canSend,
 
     // Mention state reset
     setMentionOpen: mention.setMentionOpen,
@@ -911,6 +915,13 @@ const GuidPage: React.FC = () => {
               onSelectAgent={handleSelectAgentFromPillBar}
               suppressSelectionAnimation={resetAssistantRequested}
               ccbAuthorityActive={agentSelection.ccbAuthorityActive}
+            />
+          ) : null}
+
+          {startupReadiness.ccbAuthorityActive ? (
+            <CcbStartupReadinessBanner
+              status={startupReadiness.status}
+              isPreparing={startupReadiness.isPreparing}
             />
           ) : null}
 

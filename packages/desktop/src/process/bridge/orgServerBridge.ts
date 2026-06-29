@@ -12,8 +12,10 @@ import {
   writeOrgSessionTokenFile,
 } from '@process/utils/orgServerConfig';
 import { writeWandingBusinessKnowledgeShadow } from '@process/utils/orgKnowledgeShadowSync';
+import { registerOrgHttpProxyHandlers } from '@process/bridge/orgHttpProxy';
 
 ensureOrgServerJsonFromEnv();
+registerOrgHttpProxyHandlers();
 
 ipcMain.on('get-org-server-url', (event) => {
   event.returnValue = readOrgServerUrl();

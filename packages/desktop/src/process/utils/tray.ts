@@ -14,6 +14,7 @@ import {
 import * as path from 'path';
 import { ipcBridge } from '@/common';
 import i18n from '@process/services/i18n';
+import { resolveDevResourcesDir } from '@process/utils/devResourcesPath';
 
 let tray: TrayInstance | null = null;
 let closeToTrayEnabled = false;
@@ -42,7 +43,7 @@ export const setIsQuitting = (quitting: boolean): void => {
  * macOS uses Template image to adapt to dark/light menu bar.
  */
 const getTrayIcon = (): Electron.NativeImage => {
-  const resourcesPath = app.isPackaged ? process.resourcesPath : path.join(process.cwd(), 'resources');
+  const resourcesPath = app.isPackaged ? process.resourcesPath : resolveDevResourcesDir();
   const icon = nativeImage.createFromPath(path.join(resourcesPath, 'app.png'));
   if (process.platform === 'darwin') {
     return icon.resize({ width: 16, height: 16 });

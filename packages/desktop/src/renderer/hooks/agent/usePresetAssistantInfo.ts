@@ -8,6 +8,8 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
+import { ccbAgentsService } from '@/common/adapter/ipcBridge';
+import { ASSISTANTS_LIST_SWR_KEY, fetchAssistantsCatalog } from '@/common/assistants/fetchAssistantsCatalog';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import CoworkLogo from '@/renderer/assets/icons/cowork.svg';
 import { resolveExtensionAssetUrl } from '@/renderer/utils/platform';
@@ -33,16 +35,41 @@ export interface PresetAssistantInfo {
  * Use this when matching against the backend assistant catalog
  * (`ipcBridge.assistants.list`).
  */
+function resolveCcbAgentIdFromExtra(extra: Record<string, unknown> | undefined): string {
+  if (!extra) return '';
+  const ccb_agent_id = typeof extra.ccb_agent_id === 'string' ? extra.ccb_agent_id.trim() : '';
+  if (ccb_agent_id) return ccb_agent_id;
+  const ccb_assistant_profile_id =
+    typeof extra.ccb_assistant_profile_id === 'string' ? extra.ccb_assistant_profile_id.trim() : '';
+  if (ccb_assistant_profile_id) return ccb_assistant_profile_id;
+
+  const acp_meta = extra.acp_meta;
+  if (acp_meta && typeof acp_meta === 'object') {
+    const meta = acp_meta as Record<string, unknown>;
+    const presetFromMeta =
+      (typeof meta.preset_assistant_id === 'string' && meta.preset_assistant_id.trim()) ||
+      (typeof meta.ccbAgentId === 'string' && meta.ccbAgentId.trim()) ||
+      (typeof meta.ccbAssistantProfileId === 'string' && meta.ccbAssistantProfileId.trim()) ||
+      '';
+    if (presetFromMeta) return presetFromMeta;
+  }
+  return '';
+}
+
 export function resolveAssistantConfigId(conversation: TChatConversation): string | null {
   const extra = conversation.extra as {
     assistant_id?: unknown;
     preset_assistant_id?: unknown;
     custom_agent_id?: unknown;
+    ccb_agent_id?: unknown;
+    ccb_assistant_profile_id?: unknown;
+    acp_meta?: unknown;
   };
+  const ccbAgentId = resolveCcbAgentIdFromExtra(extra as Record<string, unknown> | undefined);
   const assistant_id = typeof extra?.assistant_id === 'string' ? extra.assistant_id.trim() : '';
   const preset_assistant_id = typeof extra?.preset_assistant_id === 'string' ? extra.preset_assistant_id.trim() : '';
   const custom_agent_id = typeof extra?.custom_agent_id === 'string' ? extra.custom_agent_id.trim() : '';
-  return assistant_id || preset_assistant_id || custom_agent_id || null;
+  return ccbAgentId || assistant_id || preset_assistant_id || custom_agent_id || null;
 }
 
 export function resolvePresetId(conversation: TChatConversation): string | null {
@@ -51,11 +78,20 @@ export function resolvePresetId(conversation: TChatConversation): string | null 
     preset_assistant_id?: unknown;
     custom_agent_id?: unknown;
     enabled_skills?: unknown;
+    ccb_agent_id?: unknown;
+    ccb_assistant_profile_id?: unknown;
+    acp_meta?: unknown;
   };
+  const ccbAgentId = resolveCcbAgentIdFromExtra(extra as Record<string, unknown> | undefined);
   const assistant_id = typeof extra?.assistant_id === 'string' ? extra.assistant_id.trim() : '';
   const preset_assistant_id = typeof extra?.preset_assistant_id === 'string' ? extra.preset_assistant_id.trim() : '';
   const custom_agent_id = typeof extra?.custom_agent_id === 'string' ? extra.custom_agent_id.trim() : '';
   const enabled_skills = Array.isArray(extra?.enabled_skills) ? extra.enabled_skills : [];
+
+  // CCB Guid cards store agent id on ccb_* / acp_meta — sidebar must resolve avatar from these.
+  if (ccbAgentId) {
+    return ccbAgentId.replace('builtin-', '');
+  }
 
   if (assistant_id) {
     return assistant_id.replace('builtin-', '');
@@ -217,9 +253,15 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
 } {
   const { i18n } = useTranslation();
 
-  // Merged assistant catalog (builtin + user) from backend
-  const { data: assistantsList, isLoading: isLoadingAssistants } = useSWR('assistants', () =>
-    ipcBridge.assistants.list.invoke().catch(() => [] as Assistant[])
+  // Merged assistant catalog — CCB agent files when authority active (same as Guid cards).
+  const { data: assistantsList, isLoading: isLoadingAssistants } = useSWR(ASSISTANTS_LIST_SWR_KEY, () =>
+    fetchAssistantsCatalog().catch(() => [] as Assistant[])
+  );
+
+  const presetIdForCcbLookup = conversation ? resolvePresetId(conversation) : null;
+  const { data: ccbAgentRecord } = useSWR(
+    presetIdForCcbLookup ? (['ccbAgentsService.getAgent', presetIdForCcbLookup] as const) : null,
+    () => ccbAgentsService.getAgent.invoke({ id: presetIdForCcbLookup! })
   );
 
   // Extension-contributed ACP adapters (for ext:{extensionName}:{adapterId} conversations)
@@ -287,7 +329,7 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
       return { info: null, isLoading: false };
     }
 
-    // Assistant lookup: backend returns merged builtin + user list.
+    // Assistant lookup: Guid catalog (CCB agents) or backend /api/assistants.
     // Accept either the bare id or the legacy `builtin-` / `ext-` prefixed forms.
     if (assistantsList && Array.isArray(assistantsList)) {
       const assistantMatch = assistantsList.find(
@@ -296,7 +338,17 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
       if (assistantMatch) return { info: buildPresetInfoFromAssistant(assistantMatch, locale), isLoading: false };
     }
 
-    // Still loading — defer to avoid flickering fallback
+    // CCB sidecar fallback when catalog list is stale or id only lives on disk agent files.
+    if (ccbAgentRecord) {
+      const name = ccbAgentRecord.display_name?.trim() || ccbAgentRecord.name;
+      const normalized = normalizeAvatar(typeof ccbAgentRecord.avatar === 'string' ? ccbAgentRecord.avatar : '');
+      return {
+        info: { name, logo: normalized.logo, isEmoji: normalized.isEmoji },
+        isLoading: false,
+      };
+    }
+
+    // Still loading — defer to avoid flickering fallback to Claude logo
     if (isLoadingAssistants || isLoadingExtAdapters)
       return { info: null as PresetAssistantInfo | null, isLoading: true };
 
@@ -332,5 +384,6 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     remoteAgent,
     isLoadingRemoteAgent,
     detectedAgents,
+    ccbAgentRecord,
   ]);
 }

@@ -13,13 +13,126 @@ import {
   type HttpRequestOptions,
 } from '@/common/adapter/httpBridge';
 
+/** IPC channel — must match `orgHttpProxy.ts` in main process. */
+export const ORG_HTTP_REQUEST_CHANNEL = 'org-http-request';
+
+type OrgHttpProxyRequest = {
+  method: string;
+  path: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+};
+
+type OrgHttpProxyResponse = {
+  ok: boolean;
+  status: number;
+  json?: unknown;
+  text?: string;
+  contentType?: string;
+  error?: string;
+};
+
 declare global {
   interface Window {
     __orgServerUrl?: string;
+    electronAPI?: {
+      invokeIpc?: (channel: string, data?: unknown) => Promise<unknown>;
+    };
   }
 }
 
 export { BackendHttpError, isBackendHttpError };
+
+export type OrgRawHttpResponse = {
+  ok: boolean;
+  status: number;
+  headers: { get(name: string): string | null };
+  json: () => Promise<unknown>;
+  text: () => Promise<string>;
+};
+
+function canUseOrgHttpProxy(): boolean {
+  return typeof window !== 'undefined' && typeof window.electronAPI?.invokeIpc === 'function';
+}
+
+async function orgRawFetchViaProxy(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>
+): Promise<OrgRawHttpResponse> {
+  const payload: OrgHttpProxyRequest = {
+    method,
+    path,
+    body,
+    headers: extraHeaders,
+  };
+  const result = (await window.electronAPI!.invokeIpc!(
+    ORG_HTTP_REQUEST_CHANNEL,
+    payload
+  )) as OrgHttpProxyResponse;
+
+  if (result.error && result.status === 0) {
+    throw new TypeError(result.error);
+  }
+
+  const contentType = result.contentType ?? '';
+  return {
+    ok: result.ok,
+    status: result.status,
+    headers: {
+      get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType : null),
+    },
+    json: async () => {
+      if (result.json !== undefined) {
+        return result.json;
+      }
+      if (result.text) {
+        return JSON.parse(result.text);
+      }
+      return {};
+    },
+    text: async () => result.text ?? '',
+  };
+}
+
+async function orgRawFetchViaBrowser(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>
+): Promise<OrgRawHttpResponse> {
+  const baseUrl = getOrgBaseUrl();
+  if (!baseUrl) {
+    throw new Error('ORG_SERVER_URL is not configured');
+  }
+
+  const url = `${baseUrl}${path}`;
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
+  if (body !== undefined && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return fetch(url, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: backendFetchCredentials(),
+  });
+}
+
+/** Low-level org HTTP — prefers main-process proxy in Electron (no CORS). */
+export async function orgRawFetch(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>
+): Promise<OrgRawHttpResponse> {
+  if (canUseOrgHttpProxy()) {
+    return orgRawFetchViaProxy(method, path, body, extraHeaders);
+  }
+  return orgRawFetchViaBrowser(method, path, body, extraHeaders);
+}
 
 export function getOrgBaseUrl(): string {
   if (typeof window !== 'undefined' && window.__orgServerUrl) {
@@ -50,14 +163,11 @@ export async function orgHttpRequest<T>(
   body?: unknown,
   options?: HttpRequestOptions
 ): Promise<T> {
-  const baseUrl = getOrgBaseUrl();
-  if (!baseUrl) {
+  if (!isOrgServerConfigured() && !canUseOrgHttpProxy()) {
     throw new Error('ORG_SERVER_URL is not configured');
   }
 
-  const url = `${baseUrl}${path}`;
   const headers: Record<string, string> = {};
-
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
@@ -67,12 +177,7 @@ export async function orgHttpRequest<T>(
     headers.Authorization = `Bearer ${orgToken}`;
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    credentials: backendFetchCredentials(),
-  });
+  const response = await orgRawFetch(method, path, body, headers);
 
   if (!response.ok) {
     const rawText = await response.text().catch(() => '');

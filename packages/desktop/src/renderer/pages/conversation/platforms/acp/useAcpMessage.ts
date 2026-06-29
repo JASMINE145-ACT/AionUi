@@ -16,6 +16,16 @@ import { logStreamTerminalObserved } from '@/renderer/pages/conversation/runtime
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { isConversationProcessing } from '@/renderer/pages/conversation/utils/conversationRuntime';
 import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
+import {
+  beginPostIdleWakeWindow,
+  clearPostIdleWakeWindow,
+  getPostIdleWakeWindowTurnId,
+  scheduleWarmupReplayGuardEnd,
+} from '@/renderer/pages/conversation/runtime/postIdleWakeWindow';
+import {
+  shouldDropIdleReplayWithoutTurnId,
+  shouldDropStaleTurnStreamMessage,
+} from '@/renderer/pages/conversation/runtime/staleTurnStreamFilter';
 import type { ThoughtData } from '@/renderer/components/chat/ThoughtDisplay';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -165,6 +175,21 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
         return;
       }
 
+      const wakeWindowActive = getPostIdleWakeWindowTurnId(conversation_id) !== undefined;
+      const conversationIdle =
+        !wakeWindowActive && turnFinishedRef.current && !runningRef.current;
+      if (
+        shouldDropStaleTurnStreamMessage(conversation_id, message) ||
+        shouldDropIdleReplayWithoutTurnId(message, conversationIdle)
+      ) {
+        console.debug('[useAcpMessage] dropped stale turn stream message', {
+          conversation_id,
+          type: message.type,
+          turn_id: message.turn_id,
+        });
+        return;
+      }
+
       if (isErrorTipMessage(message)) {
         turnFinishedRef.current = true;
         setRunning(false);
@@ -257,6 +282,7 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
         case 'finish':
           {
             logStreamTerminalObserved(conversation_id, message.turn_id, 'acp', message.type);
+            clearPostIdleWakeWindow(conversation_id);
             // Mark turn as finished to prevent auto-recover from late messages
             turnFinishedRef.current = true;
             // Immediate state reset (notification is handled by centralized hook)
@@ -425,6 +451,7 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
           break;
         case 'error':
           logStreamTerminalObserved(conversation_id, message.turn_id, 'acp', message.type);
+          clearPostIdleWakeWindow(conversation_id);
           // Stop all loading states when error occurs
           turnFinishedRef.current = true;
           setRunning(false);
@@ -559,6 +586,7 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
   useEffect(() => {
     if (options?.skipWarmup) return;
     let cancelled = false;
+    beginPostIdleWakeWindow(conversation_id);
     void warmupConversation(conversation_id)
       .then(() => {
         if (cancelled) return;
@@ -569,7 +597,12 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
         if (!result || !Array.isArray(result) || result.length === 0) return;
         setSlashCommands(mapAcpCommandsToSlashCommands(result));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          scheduleWarmupReplayGuardEnd(conversation_id);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -577,6 +610,7 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
 
   const resetState = useCallback(() => {
     turnFinishedRef.current = true;
+    clearPostIdleWakeWindow(conversation_id);
     setRunning(false);
     runningRef.current = false;
     setAiProcessing(false);
@@ -586,7 +620,7 @@ export const useAcpMessage = (conversation_id: string, options?: { skipWarmup?: 
     hasThinkingMessageRef.current = false;
     activeThinkingRef.current = null;
     setHasThinkingMessage(false);
-  }, []);
+  }, [conversation_id]);
 
   const fetchSlashCommands = useCallback(() => {
     void ipcBridge.conversation.getSlashCommands

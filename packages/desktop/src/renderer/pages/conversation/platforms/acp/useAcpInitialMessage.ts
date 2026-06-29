@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { ccbMcpService } from '@/common/adapter/ipcBridge';
 import type { TMessage } from '@/common/chat/chatLib';
 import type { TConversationRuntimeSummary } from '@/common/config/storage';
 import { parseError, uuid } from '@/common/utils';
@@ -73,6 +74,7 @@ export const useAcpInitialMessage = ({
         setAiProcessing(true);
 
         if (ccbAuthorityActive) {
+          await ccbMcpService.ensureStartupReadiness.invoke();
           await warmupConversation(conversation_id);
         }
 

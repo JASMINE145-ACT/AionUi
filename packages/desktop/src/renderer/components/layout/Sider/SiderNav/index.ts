@@ -1,4 +1,5 @@
 export { default as SiderOrgKnowledgeEntry } from './SiderOrgKnowledgeEntry';
+export { default as SiderPriceLibraryEntry } from './SiderPriceLibraryEntry';
 export { default as SiderScheduledEntry } from './SiderScheduledEntry';
 export { default as SiderSearchEntry } from './SiderSearchEntry';
 export { default as SiderToolbar } from './SiderToolbar';

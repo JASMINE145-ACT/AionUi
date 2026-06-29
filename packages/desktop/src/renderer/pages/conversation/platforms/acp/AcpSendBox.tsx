@@ -21,6 +21,7 @@ import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
 import { useAcpModelInfo } from '@/renderer/hooks/agent/useAcpModelInfo';
 import { useCcbAuthorityActive, useCcbModelInfo } from '@/renderer/hooks/agent/useCcbModelInfo';
+import { useCcbStartupReadiness } from '@/renderer/hooks/agent/useCcbStartupReadiness';
 import { useAgentModesForBackend } from '@/renderer/hooks/agent/useAgentModesForBackend';
 import { savePreferredMode } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
@@ -130,6 +131,7 @@ const AcpSendBox: React.FC<{
   const assistantId = conversationContext?.assistantId;
   const initialModelId = conversationContext?.initialModelId;
   const { active: ccbAuthorityActive } = useCcbAuthorityActive(backend === 'claude');
+  const startupReadiness = useCcbStartupReadiness();
   const { modelInfo: ccbModelInfo } = useCcbModelInfo(backend === 'claude' && ccbAuthorityActive);
   const loadedMcpStatuses =
     conversationContext?.loadedMcpStatuses ??
@@ -285,6 +287,13 @@ const AcpSendBox: React.FC<{
     async ({ input, files }: Pick<ConversationCommandQueueItem, 'input' | 'files'>) => {
       const displayMessage = buildDisplayMessage(input, files, workspacePath || '');
 
+      if (ccbAuthorityActive && !startupReadiness.canSend) {
+        Message.warning(
+          t('guid.ccbStartupReadiness.wait', { defaultValue: '系统仍在准备中，请稍候再发送。' })
+        );
+        return;
+      }
+
       runtimeView.markSendStarted();
       setAiProcessing(true);
       debugSessionLog(
@@ -411,7 +420,7 @@ Please check your local CLI tool authentication status`,
         emitter.emit('acp.workspace.refresh');
       }
     },
-    [ccbAuthorityActive, ccbModelInfo, checkAndUpdateTitle, conversation_id, initialModelId, prepareRuntimeSync, resetState, runtimeView, setAiProcessing, t, teamPermission, workspacePath]
+    [ccbAuthorityActive, ccbModelInfo, checkAndUpdateTitle, conversation_id, initialModelId, prepareRuntimeSync, resetState, runtimeView, setAiProcessing, startupReadiness.canSend, t, teamPermission, workspacePath]
   );
 
   const {

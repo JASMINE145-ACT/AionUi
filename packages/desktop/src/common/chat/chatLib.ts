@@ -488,6 +488,9 @@ export const normalizeAgentStreamError = (value: unknown): AgentStreamErrorInfo 
   };
 };
 
+const attachStreamTurnId = <T extends TMessage>(message: IResponseMessage, base: T): T =>
+  message.turn_id ? { ...base, turn_id: message.turn_id } : base;
+
 /**
  * @description 将后端返回的消息转换为前端消息
  * */
@@ -501,7 +504,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         typeof errorData === 'string'
           ? errorData
           : ((errorData as { message?: string })?.message ?? JSON.stringify(errorData));
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'tips',
         msg_id: message.msg_id,
@@ -513,7 +516,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
           type: 'error',
           ...(structuredError ? { error: structuredError } : {}),
         },
-      };
+      });
     }
     case 'tips': {
       const data = message.data as {
@@ -530,7 +533,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         tipType === 'error'
           ? (normalizeAgentStreamError(data.error) ?? normalizeAgentStreamError({ ...data, message: data.content }))
           : undefined;
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'tips',
         msg_id: message.msg_id,
@@ -544,7 +547,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
           ...(tipParams ? { params: tipParams } : {}),
           ...(structuredError ? { error: structuredError } : {}),
         },
-      };
+      });
     }
     case 'text':
     case 'content':
@@ -552,7 +555,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
       const data = message.data;
       const isRichData = isResponseTextData(data);
       const shouldReplace = message.replace === true || (isRichData && data.replace === true);
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'text',
         msg_id: message.msg_id,
@@ -574,10 +577,10 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
               ...(shouldReplace ? { replace: true } : {}),
             },
         ...(message.hidden && { hidden: true }),
-      };
+      });
     }
     case 'tool_call': {
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'tool_call',
         msg_id: message.msg_id,
@@ -585,17 +588,17 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         position: 'left',
         created_at,
         content: message.data as any,
-      };
+      });
     }
     case 'tool_group': {
-      return {
+      return attachStreamTurnId(message, {
         type: 'tool_group',
         id: uuid(),
         msg_id: message.msg_id,
         conversation_id: message.conversation_id,
         created_at,
         content: message.data as any,
-      };
+      });
     }
     case 'agent_status': {
       return {
@@ -609,7 +612,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
       };
     }
     case 'permission': {
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'permission',
         msg_id: message.msg_id,
@@ -617,10 +620,10 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         conversation_id: message.conversation_id,
         created_at,
         content: message.data as any,
-      };
+      });
     }
     case 'acp_permission': {
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'acp_permission',
         msg_id: message.msg_id,
@@ -628,10 +631,10 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         conversation_id: message.conversation_id,
         created_at,
         content: message.data as any,
-      };
+      });
     }
     case 'acp_tool_call': {
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'acp_tool_call',
         msg_id: message.msg_id,
@@ -639,10 +642,10 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         conversation_id: message.conversation_id,
         created_at,
         content: message.data as any,
-      };
+      });
     }
     case 'plan': {
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'plan',
         msg_id: message.msg_id,
@@ -650,7 +653,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         conversation_id: message.conversation_id,
         created_at,
         content: message.data as any,
-      };
+      });
     }
     case 'thinking': {
       const data = message.data as {
@@ -660,7 +663,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
         duration_ms?: number;
         status: 'thinking' | 'done';
       };
-      return {
+      return attachStreamTurnId(message, {
         id: uuid(),
         type: 'thinking',
         msg_id: message.msg_id,
@@ -673,7 +676,7 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
           duration: data.duration ?? data.duration_ms,
           status: data.status,
         },
-      };
+      });
     }
     // Disabled: available_commands messages are too noisy and distracting in the chat UI
     case 'available_commands':

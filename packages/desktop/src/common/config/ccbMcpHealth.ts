@@ -102,6 +102,27 @@ function runConfigLayer(configDir: string, installDir: string | null): CcbMcpHea
     }
   }
 
+  const quotationEntry = mcpServers.quotation as { env?: Record<string, string> } | undefined;
+  const ccbProjectRoot = quotationEntry?.env?.CCB_PROJECT_ROOT?.trim() ?? '';
+  if (!ccbProjectRoot) {
+    items.push({
+      layer: 'config',
+      id: 'quotation.env.CCB_PROJECT_ROOT',
+      ok: false,
+      detail: 'missing in settings.json mcpServers.quotation.env',
+    });
+  } else {
+    const mainPy = join(ccbProjectRoot, 'python', 'main.py');
+    items.push({
+      layer: 'config',
+      id: 'quotation.env.CCB_PROJECT_ROOT',
+      ok: existsSync(mainPy),
+      detail: existsSync(mainPy)
+        ? `python/main.py exists under ${ccbProjectRoot}`
+        : `python/main.py missing under ${ccbProjectRoot}`,
+    });
+  }
+
   if (installDir) {
     for (const [name, spec] of Object.entries(CCB_MCP_HEALTH_MANIFEST.mcp_servers)) {
       for (const rel of spec.required_paths ?? []) {
@@ -161,7 +182,77 @@ function runConfigLayer(configDir: string, installDir: string | null): CcbMcpHea
   return items;
 }
 
-async function runProbeLayer(configDir: string): Promise<CcbMcpHealthItem[]> {
+async function runQuotationPythonProbe(
+  configDir: string,
+  installDir: string | null
+): Promise<CcbMcpHealthItem | null> {
+  const quotationSpec = CCB_MCP_HEALTH_MANIFEST.mcp_servers.quotation;
+  if (!quotationSpec.probe_tool_call || !installDir) {
+    return null;
+  }
+
+  const installerRoot = resolveCcbInstallerRoot();
+  const probeScript = installerRoot
+    ? join(installerRoot, 'scripts', 'test-mcp-probe-layer.mjs')
+    : null;
+  if (!probeScript || !existsSync(probeScript)) {
+    return {
+      layer: 'probe',
+      id: 'quotation:python',
+      ok: false,
+      detail: 'installer probe script not found (CCB_INSTALLER_ROOT)',
+    };
+  }
+
+  return new Promise((resolveItem) => {
+    const child = spawn('node', [probeScript, '--server=quotation'], {
+      env: {
+        ...process.env,
+        CCB_INSTALL_DIR: installDir,
+        CLAUDE_CONFIG_DIR: configDir,
+      },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('close', (code) => {
+      const tool = quotationSpec.probe_tool_call?.tool ?? 'match_quotation';
+      if (code === 0 && /\[mcp-probe\] PASS quotation/.test(stdout)) {
+        resolveItem({
+          layer: 'probe',
+          id: 'quotation:python',
+          ok: true,
+          detail: `tools/call ${tool} ok`,
+        });
+        return;
+      }
+      const detail =
+        stderr.trim() ||
+        stdout
+          .split(/\r?\n/)
+          .find((line) => line.includes('[mcp-probe] FAIL quotation'))
+          ?.replace(/^\[mcp-probe\] FAIL quotation:\s*/, '') ||
+        `probe exit ${code ?? 'unknown'}`;
+      resolveItem({
+        layer: 'probe',
+        id: 'quotation:python',
+        ok: false,
+        detail,
+      });
+    });
+  });
+}
+
+async function runProbeLayer(configDir: string, installDir: string | null): Promise<CcbMcpHealthItem[]> {
   const items: CcbMcpHealthItem[] = [];
   if (!resolveCcbWandingCliPath()) {
     items.push({
@@ -212,6 +303,11 @@ async function runProbeLayer(configDir: string): Promise<CcbMcpHealthItem[]> {
     });
   }
 
+  const pythonProbe = await runQuotationPythonProbe(configDir, installDir);
+  if (pythonProbe) {
+    items.push(pythonProbe);
+  }
+
   return items;
 }
 
@@ -246,7 +342,7 @@ export async function runCcbMcpHealthCheck(
 
   let probeLayer: CcbMcpHealthLayerResult | undefined;
   if (options.probe) {
-    const probeItems = await runProbeLayer(configDir);
+    const probeItems = await runProbeLayer(configDir, installDir);
     probeLayer = { ok: layerOk(probeItems), items: probeItems };
   }
 

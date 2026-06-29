@@ -19,6 +19,7 @@ const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const OrgKnowledgePage = React.lazy(() => import('@renderer/pages/orgKnowledge/OrgKnowledgePage'));
+const PriceLibraryPage = React.lazy(() => import('@renderer/pages/priceLibrary/PriceLibraryPage'));
 const WorkTasksPage = React.lazy(() => import('@renderer/pages/workTasks/WorkTasksPage'));
 const WorkTaskDetailPage = React.lazy(() => import('@renderer/pages/workTasks/WorkTasksPage/WorkTaskDetailPage'));
 const TeamMembersPage = React.lazy(() => import('@renderer/pages/settings/TeamMembersPage'));
@@ -82,6 +83,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/org-knowledge' element={withRouteFallback(OrgKnowledgePage)} />
+          <Route path='/price-library' element={withRouteFallback(PriceLibraryPage)} />
           <Route path='/tasks' element={withRouteFallback(WorkTasksPage)} />
           <Route path='/tasks/:task_id' element={withRouteFallback(WorkTaskDetailPage)} />
         </Route>

@@ -16,6 +16,11 @@ import {
   updateCcbMcpServer,
 } from '@/common/config/ccbMcpSettings';
 import { repairCcbMcpHealth, runCcbMcpHealthCheck } from '@/common/config/ccbMcpHealth';
+import {
+  ensureCcbStartupReadiness,
+  getCcbStartupReadinessStatus,
+  startCcbStartupReadinessPipeline,
+} from '@/common/config/ccbStartupReadiness';
 import { isCcbMcpAuthorityActive } from '@/common/config/ccbWandingRuntimeNode';
 import type { IMcpServer } from '@/common/config/storage';
 
@@ -72,4 +77,12 @@ export function initCcbMcpBridge(): void {
   ipcBridge.ccbMcpService.repairHealth.provider(async ({ actionIds }) => {
     return repairCcbMcpHealth({ actionIds });
   });
+
+  ipcBridge.ccbMcpService.getStartupReadiness.provider(async () => getCcbStartupReadinessStatus());
+
+  ipcBridge.ccbMcpService.ensureStartupReadiness.provider(async () => ensureCcbStartupReadiness());
+
+  if (isCcbMcpAuthorityActive()) {
+    startCcbStartupReadinessPipeline();
+  }
 }

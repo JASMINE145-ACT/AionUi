@@ -64,6 +64,7 @@ export type GuidSendDeps = {
   currentEffectiveAgentInfo: EffectiveAgentInfo;
   isGoogleAuth: boolean;
   ccbAuthorityActive: boolean;
+  startupReadinessCanSend?: boolean;
 
   // Mention state reset
   setMentionOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -118,6 +119,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     currentEffectiveAgentInfo: _currentEffectiveAgentInfo,
     isGoogleAuth,
     ccbAuthorityActive,
+    startupReadinessCanSend = true,
     setMentionOpen,
     setMentionQuery,
     setMentionSelectorOpen,
@@ -129,6 +131,13 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   const sendingRef = useRef(false);
 
   const handleSend = useCallback(async () => {
+    if (ccbAuthorityActive && !startupReadinessCanSend) {
+      Message.warning(
+        t('guid.ccbStartupReadiness.wait', { defaultValue: '系统仍在准备中，请稍候再发送。' })
+      );
+      return;
+    }
+
     const isCustomWorkspace = !!dir;
     const finalWorkspace = dir || '';
 
@@ -373,6 +382,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     t,
     localeKey,
     ccbAuthorityActive,
+    startupReadinessCanSend,
   ]);
 
   const sendMessageHandler = useCallback(() => {
@@ -412,7 +422,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   ]);
 
   // Calculate button disabled state
-  const isButtonDisabled = loading || !input.trim();
+  const isButtonDisabled =
+    loading || !input.trim() || (ccbAuthorityActive && !startupReadinessCanSend);
 
   return {
     handleSend,

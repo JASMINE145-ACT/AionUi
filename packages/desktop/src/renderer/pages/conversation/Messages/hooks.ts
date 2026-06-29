@@ -208,6 +208,15 @@ function composeMessageWithIndex(message: TMessage | undefined, list: TMessage[]
     }
 
     if (last.type === 'text' && last.msg_id === message.msg_id) {
+      if (
+        last.turn_id &&
+        message.turn_id &&
+        last.turn_id !== message.turn_id
+      ) {
+        const newIdx = list.length;
+        index.msgIdIndex.set(message.msg_id, newIdx);
+        return list.concat(message);
+      }
       const newList = list.slice();
       newList[newList.length - 1] = {
         ...last,

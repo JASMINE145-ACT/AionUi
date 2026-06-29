@@ -56,7 +56,7 @@ describe('useAcpMessage', () => {
   it('completes hydration when the conversation lookup fails', async () => {
     vi.mocked(getConversationOrNull).mockRejectedValue(new TypeError('Failed to fetch'));
 
-    const { result } = renderHook(() => useAcpMessage('conv-1'));
+    const { result } = renderHook(() => useAcpMessage('conv-1', { skipWarmup: true }));
 
     await waitFor(() => {
       expect(result.current.hasHydratedRunningState).toBe(true);
@@ -70,7 +70,7 @@ describe('useAcpMessage', () => {
     vi.mocked(getConversationOrNull).mockResolvedValue(null);
 
     const now = Date.now();
-    renderHook(() => useAcpMessage('conv-1'));
+    renderHook(() => useAcpMessage('conv-1', { skipWarmup: true }));
 
     expect(responseStreamHandlerRef.current).toBeTypeOf('function');
 
@@ -118,7 +118,7 @@ describe('useAcpMessage', () => {
   it('completes thinking as soon as the first non-thinking message arrives', async () => {
     vi.mocked(getConversationOrNull).mockResolvedValue(null);
 
-    renderHook(() => useAcpMessage('conv-1'));
+    renderHook(() => useAcpMessage('conv-1', { skipWarmup: true }));
 
     responseStreamHandlerRef.current?.({
       type: 'thinking',
@@ -169,10 +169,52 @@ describe('useAcpMessage', () => {
     );
   });
 
+  it('drops replay text during post-idle wake window before accept', async () => {
+    vi.mocked(getConversationOrNull).mockResolvedValue(null);
+
+    renderHook(() => useAcpMessage('conv-1', { skipWarmup: true }));
+
+    const { beginPostIdleWakeWindow } = await import(
+      '@/renderer/pages/conversation/runtime/postIdleWakeWindow'
+    );
+    beginPostIdleWakeWindow('conv-1');
+
+    responseStreamHandlerRef.current?.({
+      type: 'text',
+      data: 'replayed greeting',
+      msg_id: 'msg-replay',
+      turn_id: 'old-turn',
+      conversation_id: 'conv-1',
+    });
+
+    expect(addOrUpdateMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('allows live text without turn_id after acceptPostIdleWakeTurn', async () => {
+    vi.mocked(getConversationOrNull).mockResolvedValue(null);
+
+    renderHook(() => useAcpMessage('conv-1', { skipWarmup: true }));
+
+    const { beginPostIdleWakeWindow, acceptPostIdleWakeTurn } = await import(
+      '@/renderer/pages/conversation/runtime/postIdleWakeWindow'
+    );
+    beginPostIdleWakeWindow('conv-1');
+    acceptPostIdleWakeTurn('conv-1', 'turn-live');
+
+    responseStreamHandlerRef.current?.({
+      type: 'text',
+      data: 'live chunk',
+      msg_id: 'msg-live',
+      conversation_id: 'conv-1',
+    });
+
+    expect(addOrUpdateMessageMock).toHaveBeenCalled();
+  });
+
   it('preserves slash-command metadata from available_commands stream updates', async () => {
     vi.mocked(getConversationOrNull).mockResolvedValue(null);
 
-    const { result } = renderHook(() => useAcpMessage('conv-1'));
+    const { result } = renderHook(() => useAcpMessage('conv-1', { skipWarmup: true }));
 
     act(() => {
       responseStreamHandlerRef.current?.({

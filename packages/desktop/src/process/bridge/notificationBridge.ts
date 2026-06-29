@@ -14,6 +14,7 @@
 import { getPlatformServices } from '@/common/platform';
 import { ipcBridge } from '@/common';
 import { ProcessConfig } from '@process/utils/initStorage';
+import { resolveDevResourcesDir } from '@process/utils/devResourcesPath';
 import path from 'path';
 import fs from 'fs';
 
@@ -24,7 +25,7 @@ const getNotificationIcon = (): string | undefined => {
   try {
     const resourcesPath = getPlatformServices().paths.isPackaged()
       ? process.resourcesPath
-      : path.join(process.cwd(), 'resources');
+      : resolveDevResourcesDir();
     const iconPath = path.join(resourcesPath, 'app.png');
     if (fs.existsSync(iconPath)) {
       return iconPath;

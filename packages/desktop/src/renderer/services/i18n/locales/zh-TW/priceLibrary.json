@@ -1,0 +1,22 @@
+{
+  "title": "Price Library",
+  "pageTitle": "Wanding Shared Price Library",
+  "unconfigured": "ORG_SERVER_URL is not configured.",
+  "refresh": "Refresh",
+  "searchPlaceholder": "Search material code or description",
+  "resultCount": "{{count}} items",
+  "versionTag": "v{{n}}",
+  "loggedInAs": "Account: {{user}}",
+  "loadFailed": "Failed to load price library",
+  "loadFailed404": "Organization server does not expose the price library API (404). Deploy self-built aioncore with aionui-price-library on the VPS and retry.",
+  "emptyPublished": "No published price library version on the org server yet.",
+  "column": {
+    "material": "Material",
+    "description": "Description",
+    "unit": "Unit",
+    "priceA": "Tier A",
+    "priceB": "Tier B",
+    "priceC": "Tier C",
+    "priceD": "Tier D"
+  }
+}

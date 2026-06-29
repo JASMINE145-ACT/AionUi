@@ -37,6 +37,25 @@ type LoginErrorCode =
   | 'csrfError'
   | 'unknown';
 
+function mapOrgLoginErrorCode(message?: string): LoginErrorCode {
+  if (!message) {
+    return 'unknown';
+  }
+  const lower = message.toLowerCase();
+  if (
+    lower.includes('network') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('fetch failed') ||
+    lower.includes('econnrefused')
+  ) {
+    return 'networkError';
+  }
+  if (lower.includes('not configured')) {
+    return 'serverError';
+  }
+  return 'invalidCredentials';
+}
+
 interface LoginResult {
   success: boolean;
   message?: string;
@@ -224,7 +243,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return {
             success: false,
             message: result.message ?? 'Login failed',
-            code: 'invalidCredentials',
+            code: mapOrgLoginErrorCode(result.message),
           };
         }
 

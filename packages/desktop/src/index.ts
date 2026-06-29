@@ -70,6 +70,7 @@ import {
   setIsQuitting,
 } from './process/utils/tray';
 import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
+import { resolveDevResourceFile } from './process/utils/devResourcesPath';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -317,8 +318,8 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     try {
       // Windows: app.ico (no dev version), Linux: app_dev.png (with padding)
       const iconFile = process.platform === 'win32' ? 'app.ico' : 'app_dev.png';
-      const iconPath = path.join(process.cwd(), 'resources', iconFile);
-      if (fs.existsSync(iconPath)) {
+      const iconPath = resolveDevResourceFile(iconFile);
+      if (iconPath) {
         devIcon = nativeImage.createFromPath(iconPath);
         if (devIcon.isEmpty()) devIcon = undefined;
       }
@@ -521,8 +522,8 @@ const handleAppReady = async (): Promise<void> => {
   // In production, the icon is set via forge.config.ts packagerConfig.icon
   if (process.platform === 'darwin' && !app.isPackaged && app.dock) {
     try {
-      const iconPath = path.join(process.cwd(), 'resources', 'app_dev.png');
-      if (fs.existsSync(iconPath)) {
+      const iconPath = resolveDevResourceFile('app_dev.png');
+      if (iconPath) {
         const icon = nativeImage.createFromPath(iconPath);
         if (!icon.isEmpty()) {
           app.dock.setIcon(icon);

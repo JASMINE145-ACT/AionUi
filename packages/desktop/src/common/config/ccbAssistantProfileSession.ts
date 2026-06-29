@@ -14,7 +14,8 @@ import { normalizeCcbAssistantProfileId } from './ccbAssistantProfiles';
 import { resolveCcbClaudeConfigDir, stripBuiltinAssistantIdPrefix } from './ccbWandingRuntime';
 
 export const CCB_NEXT_ASSISTANT_PROFILE_FILE = '.aionui-next-assistant-profile.json' as const;
-const MAX_PENDING_AGE_MS = 60_000;
+/** Cover slow session/new after idle resume (MCP cold start); stale files still cleared on read. */
+const MAX_PENDING_AGE_MS = 300_000;
 
 export type CcbNextAssistantProfilePending = {
   profile_id: string;

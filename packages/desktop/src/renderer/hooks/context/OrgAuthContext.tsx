@@ -3,14 +3,13 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { clearOrgSessionToken, getOrgSessionToken } from '@/common/auth/orgAuthSession';
+import { clearOrgSessionToken } from '@/common/auth/orgAuthSession';
 import { ORG_AUTH_UPDATED_EVENT, performOrgLogin, type OrgLoginParams } from '@/common/auth/orgAuthLogin';
 import {
   WANDING_BUSINESS_KNOWLEDGE_SLUG,
   syncWandingBusinessKnowledgeShadow,
 } from '@/common/auth/orgKnowledgeShadowSync';
-import { backendFetchCredentials } from '@/common/adapter/httpBridge';
-import { getOrgBaseUrl, getOrgBearerToken, isOrgServerConfigured } from '@/common/adapter/orgHttpBridge';
+import { getOrgBaseUrl, getOrgBearerToken, isOrgServerConfigured, orgRawFetch } from '@/common/adapter/orgHttpBridge';
 import type { AuthUser } from '@/renderer/hooks/context/AuthContext';
 
 type OrgAuthStatus = 'idle' | 'checking' | 'authenticated' | 'unauthenticated' | 'unconfigured';
@@ -37,25 +36,41 @@ async function writeOrgTokenToMain(token: string | null): Promise<void> {
   await api.electronAPI?.invokeIpc?.('org-auth-write-token', { token });
 }
 
-async function fetchOrgUser(signal?: AbortSignal): Promise<AuthUser | null> {
+type FetchOrgUserResult = {
+  user: AuthUser | null;
+  /** True when org server rejected the bearer token (safe to clear session). */
+  invalidToken: boolean;
+};
+
+async function fetchOrgUser(signal?: AbortSignal): Promise<FetchOrgUserResult> {
   if (!isOrgServerConfigured()) {
-    return null;
+    return { user: null, invalidToken: false };
+  }
+  if (signal?.aborted) {
+    return { user: null, invalidToken: false };
+  }
+  const bearer = getOrgBearerToken();
+  if (!bearer) {
+    return { user: null, invalidToken: false };
   }
   try {
-    const bearer = getOrgBearerToken();
-    const response = await fetch(`${getOrgBaseUrl()}${ORG_AUTH_USER_PATH}`, {
-      method: 'GET',
-      credentials: backendFetchCredentials(),
-      headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
-      signal,
+    const response = await orgRawFetch('GET', ORG_AUTH_USER_PATH, undefined, {
+      Authorization: `Bearer ${bearer}`,
     });
+    if (signal?.aborted) {
+      return { user: null, invalidToken: false };
+    }
     if (!response.ok) {
-      return null;
+      return {
+        user: null,
+        invalidToken: response.status === 401 || response.status === 403,
+      };
     }
     const data = (await response.json()) as { success: boolean; user?: AuthUser };
-    return data.success && data.user ? data.user : null;
+    const user = data.success && data.user ? data.user : null;
+    return { user, invalidToken: !user };
   } catch {
-    return null;
+    return { user: null, invalidToken: false };
   }
 }
 
@@ -77,13 +92,15 @@ export const OrgAuthProvider: React.FC<React.PropsWithChildren> = ({ children })
     abortRef.current = controller;
     setOrgStatus('checking');
 
-    const user = await fetchOrgUser(controller.signal);
+    const { user, invalidToken } = await fetchOrgUser(controller.signal);
     if (user) {
       setOrgUser(user);
       setOrgStatus('authenticated');
     } else {
-      clearOrgSessionToken();
-      void writeOrgTokenToMain(null);
+      if (invalidToken) {
+        clearOrgSessionToken();
+        void writeOrgTokenToMain(null);
+      }
       setOrgUser(null);
       setOrgStatus('unauthenticated');
     }

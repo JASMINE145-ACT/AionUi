@@ -11,6 +11,7 @@ import {
   clearPostIdleWakeWindow,
   getPostIdleWakeWindowTurnId,
   resetPostIdleWakeWindowsForTest,
+  scheduleWarmupReplayGuardEnd,
 } from '@/renderer/pages/conversation/runtime/postIdleWakeWindow';
 
 const conversation_id = 'conversation-1';
@@ -42,6 +43,14 @@ describe('postIdleWakeWindow', () => {
     acceptPostIdleWakeTurn(conversation_id, 'turn-1');
     clearPostIdleWakeWindow(conversation_id);
 
+    expect(getPostIdleWakeWindowTurnId(conversation_id)).toBeUndefined();
+  });
+
+  it('scheduleWarmupReplayGuardEnd expires pre-accept window', async () => {
+    beginPostIdleWakeWindow(conversation_id);
+    scheduleWarmupReplayGuardEnd(conversation_id, 20);
+    expect(getPostIdleWakeWindowTurnId(conversation_id)).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 30));
     expect(getPostIdleWakeWindowTurnId(conversation_id)).toBeUndefined();
   });
 });

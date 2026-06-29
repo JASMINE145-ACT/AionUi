@@ -42,6 +42,7 @@ import type {
   RevertOrgKnowledgeDocRequest,
   UpdateOrgKnowledgeDocRequest,
 } from '../types/orgKnowledge/orgKnowledgeTypes';
+import type { PriceActiveResponse } from '../types/priceLibrary/priceLibraryTypes';
 import type { AcpModelInfo } from '../types/platform/acpTypes';
 import type {
   CreateProviderRequest,
@@ -97,6 +98,7 @@ import {
   wsEmitter,
   wsMappedEmitter,
 } from './httpBridge';
+import { orgHttpGet, orgHttpPost, orgHttpPut } from './orgHttpBridge';
 import { fromApiSearchResult, type ApiMessageSearchItem } from './searchMapper';
 import type { IAddTeamAgentParams, ICreateTeamParams } from './teamMapper';
 import {
@@ -752,12 +754,12 @@ export const auth = {
 };
 
 export const orgKnowledge = {
-  listDocs: httpGet<OrgKnowledgeDocSummary[], void>('/api/org-knowledge'),
-  getDoc: httpGet<OrgKnowledgeDoc, { slug: string }>((p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}`),
-  listHistory: httpGet<OrgKnowledgeRevisionSummary[], { slug: string }>(
+  listDocs: orgHttpGet<OrgKnowledgeDocSummary[], void>('/api/org-knowledge'),
+  getDoc: orgHttpGet<OrgKnowledgeDoc, { slug: string }>((p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}`),
+  listHistory: orgHttpGet<OrgKnowledgeRevisionSummary[], { slug: string }>(
     (p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}/history`
   ),
-  updateDoc: httpPut<OrgKnowledgeDoc, { slug: string } & UpdateOrgKnowledgeDocRequest>(
+  updateDoc: orgHttpPut<OrgKnowledgeDoc, { slug: string } & UpdateOrgKnowledgeDocRequest>(
     (p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}`,
     (p) => ({
       title: p.title,
@@ -765,10 +767,14 @@ export const orgKnowledge = {
       expected_version: p.expected_version,
     })
   ),
-  revertDoc: httpPost<OrgKnowledgeDoc, { slug: string } & RevertOrgKnowledgeDocRequest>(
+  revertDoc: orgHttpPost<OrgKnowledgeDoc, { slug: string } & RevertOrgKnowledgeDocRequest>(
     (p) => `/api/org-knowledge/${encodeURIComponent(p.slug)}/revert`,
     (p) => ({ target_version: p.target_version })
   ),
+};
+
+export const priceLibrary = {
+  getActive: orgHttpGet<PriceActiveResponse, void>('/api/price-library/active'),
 };
 
 export const workTask = {

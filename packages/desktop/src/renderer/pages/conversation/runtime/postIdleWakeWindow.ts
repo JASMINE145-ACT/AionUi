@@ -35,6 +35,17 @@ export const clearPostIdleWakeWindow = (conversation_id: string): void => {
   wakeWindows.delete(conversation_id);
 };
 
+/** After auto-warmup on mount, keep dropping replay for a short window (replay is async). */
+export const scheduleWarmupReplayGuardEnd = (conversation_id: string, ms = 8000): void => {
+  if (!conversation_id) return;
+  const window = wakeWindows.get(conversation_id);
+  if (!window || window.activeTurnId !== null) return;
+  wakeWindows.set(conversation_id, {
+    activeTurnId: null,
+    expiresAt: nowMs() + ms,
+  });
+};
+
 export const getPostIdleWakeWindowTurnId = (conversation_id: string): string | null | undefined => {
   const window = wakeWindows.get(conversation_id);
   if (!window) return undefined;

@@ -10,7 +10,84 @@
 import { ipcBridge } from '@/common';
 import { ccbModelService } from '@/common/adapter/ipcBridge';
 import type { ICreateConversationParams } from '@/common/adapter/ipcBridge';
+import type { TMessage } from '@/common/chat/chatLib';
 import { stripBuiltinAssistantIdPrefix } from '@/common/config/ccbWandingRuntime';
+
+const QUOTATION_AGENT_ID = 'quotation-agent';
+const ACCURATE_AGENT_ID = 'accurate-agent';
+
+export function resolveCcbProfileIdFromConversationExtra(
+  extra: Record<string, unknown> | undefined
+): string | undefined {
+  if (!extra) return undefined;
+  for (const key of ['ccb_assistant_profile_id', 'ccb_agent_id', 'preset_assistant_id'] as const) {
+    const v = extra[key];
+    if (typeof v === 'string' && v.trim()) return stripBuiltinAssistantIdPrefix(v.trim());
+  }
+  const acpMeta = extra.acp_meta;
+  if (acpMeta && typeof acpMeta === 'object') {
+    const nested = acpMeta as Record<string, unknown>;
+    for (const key of [
+      'ccbAgentId',
+      'ccb_agent_id',
+      'ccbAssistantProfileId',
+      'ccb_assistant_profile_id',
+      'preset_assistant_id',
+    ] as const) {
+      const v = nested[key];
+      if (typeof v === 'string' && v.trim()) return stripBuiltinAssistantIdPrefix(v.trim());
+    }
+  }
+  return undefined;
+}
+
+function specialistFromToolTitle(title: string): string | undefined {
+  const t = title.trim().toLowerCase();
+  if (t.includes('mcp__quotation__')) return QUOTATION_AGENT_ID;
+  if (t.includes('mcp__accurate__')) return ACCURATE_AGENT_ID;
+  return undefined;
+}
+
+function specialistFromMessage(message: TMessage): string | undefined {
+  if (message.type === 'acp_tool_call') {
+    const update = message.content?.update;
+    if (!update) return undefined;
+    const fromTitle = update.title ? specialistFromToolTitle(update.title) : undefined;
+    if (fromTitle) return fromTitle;
+    const raw = update.rawInput ?? (update as { raw_input?: Record<string, unknown> }).raw_input;
+    if (update.title === 'Agent' && raw) {
+      const sub =
+        (typeof raw.subagent_type === 'string' && raw.subagent_type) ||
+        (typeof raw.agent === 'string' && raw.agent) ||
+        '';
+      const id = sub.trim() ? stripBuiltinAssistantIdPrefix(sub.trim()) : '';
+      if (id === QUOTATION_AGENT_ID || id === ACCURATE_AGENT_ID) return id;
+    }
+  }
+  return undefined;
+}
+
+async function inferCcbSpecialistProfileFromConversation(conversation_id: string): Promise<string | undefined> {
+  try {
+    const page = await ipcBridge.database.getConversationMessages.invoke({
+      conversation_id,
+      page: 1,
+      page_size: 80,
+      order: 'desc',
+      content_mode: 'compact',
+    });
+    for (const message of page?.items ?? []) {
+      const specialist = specialistFromMessage(message);
+      if (specialist) return specialist;
+    }
+  } catch (error) {
+    console.warn('[inferCcbSpecialistProfileFromConversation] failed', {
+      conversation_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return undefined;
+}
 
 export async function stageCcbAssistantProfileForSession(profileId: string | undefined): Promise<void> {
   const id = profileId?.trim() ? stripBuiltinAssistantIdPrefix(profileId.trim()) : '';
@@ -34,13 +111,25 @@ export async function stageCcbAssistantProfileFromConversation(conversation_id: 
     .invoke({ id: conversation_id })
     .catch((): null => null);
   const extra = conversation?.extra as Record<string, unknown> | undefined;
-  if (!extra) return;
 
-  const profileId =
-    (typeof extra.ccb_assistant_profile_id === 'string' && extra.ccb_assistant_profile_id) ||
-    (typeof extra.preset_assistant_id === 'string' && extra.preset_assistant_id) ||
-    undefined;
+  let profileId = resolveCcbProfileIdFromConversationExtra(extra);
+  if (!profileId) {
+    profileId = await inferCcbSpecialistProfileFromConversation(conversation_id);
+  }
 
+  if (!profileId) {
+    console.info('[stageCcbAssistantProfileFromConversation] no_profile_to_stage', {
+      conversation_id,
+      has_extra: Boolean(extra),
+    });
+    return;
+  }
+
+  console.info('[stageCcbAssistantProfileFromConversation] staging', {
+    conversation_id,
+    profile_id: profileId,
+    source: resolveCcbProfileIdFromConversationExtra(extra) ? 'extra' : 'history_inference',
+  });
   await stageCcbAssistantProfileForSession(profileId);
 }
 
@@ -68,6 +157,7 @@ export async function buildCcbPresetConversationExtra(
   return {
     ccb_assistant_profile_id: id,
     ccb_agent_id: id,
+    preset_assistant_id: id,
     acp_meta: {
       ccbAssistantProfileId: id,
       ccbAgentId: id,

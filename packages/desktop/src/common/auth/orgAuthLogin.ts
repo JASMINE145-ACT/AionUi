@@ -6,8 +6,7 @@ import { setOrgSessionToken } from '@/common/auth/orgAuthSession';
 import { setSessionToken } from '@/common/auth/authSession';
 import { syncOrgKnowledgeShadowAfterLogin } from '@/common/auth/orgKnowledgeShadowSync';
 import { isUnifiedOrgSsoEnabled } from '@/common/auth/ssoMode';
-import { backendFetchCredentials } from '@/common/adapter/httpBridge';
-import { getOrgBaseUrl, isOrgServerConfigured } from '@/common/adapter/orgHttpBridge';
+import { getOrgBaseUrl, isOrgServerConfigured, orgRawFetch } from '@/common/adapter/orgHttpBridge';
 
 export const ORG_AUTH_UPDATED_EVENT = 'aionui:org-auth-updated';
 
@@ -71,12 +70,7 @@ export async function performOrgLogin({ username, password }: OrgLoginParams): P
   }
 
   try {
-    const response = await fetch(`${getOrgBaseUrl()}${ORG_LOGIN_PATH}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: backendFetchCredentials(),
-      body: JSON.stringify({ username, password }),
-    });
+    const response = await orgRawFetch('POST', ORG_LOGIN_PATH, { username, password });
 
     const data = (await response.json()) as {
       success: boolean;

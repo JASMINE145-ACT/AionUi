@@ -66,6 +66,35 @@ describe('orgHttpBridge', () => {
     tokenSpy.mockRestore();
   });
 
+  it('orgHttpRequest uses IPC proxy in Electron renderer', async () => {
+    (globalThis as { __orgServerUrl?: string }).__orgServerUrl = 'http://org.local:13401';
+    (globalThis as { window?: { electronAPI?: { invokeIpc: ReturnType<typeof vi.fn> } } }).window = {
+      electronAPI: {
+        invokeIpc: vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: { success: true, data: [{ slug: 'wanding_business_knowledge' }] },
+          contentType: 'application/json',
+        }),
+      },
+    };
+    vi.spyOn(orgAuthSession, 'getOrgSessionToken').mockReturnValue('org-test-token');
+
+    const fetchMock = vi.fn();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      const result = await orgHttpRequest('GET', '/api/org-knowledge');
+      expect(result).toEqual([{ slug: 'wanding_business_knowledge' }]);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(window.electronAPI?.invokeIpc).toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete (globalThis as { window?: unknown }).window;
+    }
+  });
+
   it('getOrgBearerToken falls back to session token in unified SSO mode', () => {
     vi.spyOn(orgAuthSession, 'getOrgSessionToken').mockReturnValue(null);
     vi.spyOn(ssoMode, 'isUnifiedOrgSsoEnabled').mockReturnValue(true);
