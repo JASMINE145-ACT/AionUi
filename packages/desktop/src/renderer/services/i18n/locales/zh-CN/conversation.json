@@ -19,6 +19,12 @@
     "skillsMarketDesc": "按需搜索并调用社区 Skills，一次配置，所有Agent通用。",
     "skillsMarketDetails": "详情 >>"
   },
+  "attention": {
+    "permissionTitle": "{{name}} 需要确认",
+    "permissionBody": "Agent 正在等待你的授权。",
+    "completionTitle": "{{name}}",
+    "completionBody": "Agent 已停止回答。"
+  },
   "history": {
     "recents": "最近",
     "noHistory": "暂无对话历史",

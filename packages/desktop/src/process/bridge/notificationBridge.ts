@@ -15,6 +15,7 @@ import { getPlatformServices } from '@/common/platform';
 import { ipcBridge } from '@/common';
 import { ProcessConfig } from '@process/utils/initStorage';
 import { resolveDevResourcesDir } from '@process/utils/devResourcesPath';
+import { Notification } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
@@ -44,6 +45,7 @@ const getNotificationIcon = (): string | undefined => {
 export async function showNotification({
   title,
   body,
+  conversation_id,
 }: {
   title: string;
   body: string;
@@ -58,7 +60,17 @@ export async function showNotification({
   const iconPath = getNotificationIcon();
 
   try {
-    getPlatformServices().notification.send({ title, body, icon: iconPath });
+    const notification = new Notification({
+      title,
+      body,
+      icon: iconPath,
+    });
+
+    notification.on('click', () => {
+      ipcBridge.notification.clicked.emit({ conversation_id });
+    });
+
+    notification.show();
   } catch (error) {
     console.error('[Notification] Error creating notification:', error);
   }

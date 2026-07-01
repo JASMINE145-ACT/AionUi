@@ -26,6 +26,13 @@ if (!app.isPackaged) {
   app.setPath('userData', path.join(appSupportDir, devAppName));
 }
 
+// Windows toast notifications require an AppUserModelId to be registered before the app
+// is ready. In packaged builds electron-builder handles this; in dev mode we must set it
+// explicitly or Notification.show() silently does nothing.
+if (process.platform === 'win32') {
+  app.setAppUserModelId(app.isPackaged ? 'com.aionui.app' : app.getName());
+}
+
 // app.disableHardwareAcceleration() must run before app is ready.
 applyGpuRecoveryFlags();
 

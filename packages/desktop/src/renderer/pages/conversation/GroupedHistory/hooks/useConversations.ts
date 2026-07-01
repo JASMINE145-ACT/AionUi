@@ -5,8 +5,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useConversationHistoryContext } from '@/renderer/hooks/context/ConversationHistoryContext';
+import { parseActiveConversationIdFromPath } from '@/renderer/pages/conversation/GroupedHistory/utils/conversationAttention';
 import {
   dispatchWorkspaceExpansionChange,
   readExpandedWorkspaces,
@@ -15,12 +16,15 @@ import {
 
 export const useConversations = () => {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<string[]>(() => readExpandedWorkspaces());
-  const { id } = useParams();
+  const location = useLocation();
+  const activeConversationId = parseActiveConversationIdFromPath(location.pathname);
   const {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasAttentionUnread,
     clearCompletionUnread,
+    clearPermissionUnread,
     setActiveConversation,
     groupedHistory,
   } = useConversationHistoryContext();
@@ -33,20 +37,21 @@ export const useConversations = () => {
   // Use double-RAF to wait for async sibling content (e.g. CronJobSiderSection)
   // to finish rendering before calculating scroll position.
   useEffect(() => {
-    if (!id) {
+    if (!activeConversationId) {
       setActiveConversation(null);
       return;
     }
 
-    setActiveConversation(id);
-    clearCompletionUnread(id);
+    setActiveConversation(activeConversationId);
+    clearCompletionUnread(activeConversationId);
+    clearPermissionUnread(activeConversationId);
     let cancelled = false;
     let outerRafId: number;
     let innerRafId: number;
     outerRafId = requestAnimationFrame(() => {
       innerRafId = requestAnimationFrame(() => {
         if (cancelled) return;
-        const element = document.getElementById('c-' + id);
+        const element = document.getElementById('c-' + activeConversationId);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
@@ -57,7 +62,7 @@ export const useConversations = () => {
       cancelAnimationFrame(outerRafId);
       cancelAnimationFrame(innerRafId);
     };
-  }, [clearCompletionUnread, id, setActiveConversation]);
+  }, [activeConversationId, clearCompletionUnread, clearPermissionUnread, setActiveConversation]);
 
   // Persist expansion state
   useEffect(() => {
@@ -123,6 +128,7 @@ export const useConversations = () => {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasAttentionUnread,
     expandedWorkspaces,
     pinnedConversations,
     timelineSections,

@@ -25,6 +25,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
     conversation,
     isGenerating,
     hasCompletionUnread,
+    hasAttentionUnread,
     collapsed,
     tooltipEnabled,
     batchMode,
@@ -121,7 +122,8 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
   };
 
   const renderCompletionUnreadDot = () => {
-    if (batchMode || !hasCompletionUnread || isGenerating) {
+    const showAttention = hasAttentionUnread ?? hasCompletionUnread;
+    if (batchMode || !showAttention || isGenerating) {
       return null;
     }
 

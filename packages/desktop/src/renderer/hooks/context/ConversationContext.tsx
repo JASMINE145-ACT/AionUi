@@ -41,10 +41,15 @@ export interface ConversationContextValue {
   hideSendBox?: boolean;
 
   /**
-   * Loaded skill names for this conversation (snapshot from conversation.extra.skills).
+   * Loaded skill names for this conversation (platform snapshot + agent-bound merge).
    * Surfaced inside the SendBox `+` menu so users can review/jump to active skills.
    */
   loadedSkills?: string[];
+
+  /**
+   * Agent-bound skill names from the CCB agent profile (for partitioned display).
+   */
+  agentBoundSkills?: string[];
 
   /**
    * Loaded MCP server names for this conversation (snapshot from

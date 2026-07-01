@@ -16,7 +16,8 @@ import { Delete, FolderOpen, MoreOne, Plus, Right } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { parseActiveConversationIdFromPath } from './utils/conversationAttention';
 
 import WorkspaceCollapse from '../components/WorkspaceCollapse';
 import ConversationRow from './ConversationRow';
@@ -37,7 +38,8 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   onBatchModeChange,
   afterPinnedContent,
 }) => {
-  const { id } = useParams();
+  const location = useLocation();
+  const activeConversationId = parseActiveConversationIdFromPath(location.pathname);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const layout = useLayoutContext();
@@ -101,16 +103,16 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
 
   // Sync active conversation ref when route changes (for URL navigation)
   // This doesn't trigger state update, avoiding double render
+  // Keep cron unread ref aligned with the conversation route (not team routes).
   useEffect(() => {
-    if (id) {
-      setActiveConversation(id);
-    }
-  }, [id, setActiveConversation]);
+    setActiveConversation(activeConversationId);
+  }, [activeConversationId, setActiveConversation]);
 
   const {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasAttentionUnread,
     expandedWorkspaces,
     pinnedConversations,
     timelineSections,
@@ -189,11 +191,12 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
       conversation,
       isGenerating: isConversationGenerating(conversation.id),
       hasCompletionUnread: hasCompletionUnread(conversation.id),
+      hasAttentionUnread: hasAttentionUnread(conversation.id),
       collapsed,
       tooltipEnabled,
       batchMode,
       checked: selectedConversationIds.has(conversation.id),
-      selected: id === conversation.id,
+      selected: activeConversationId === conversation.id,
       menuVisible: dropdownVisibleId !== null && dropdownVisibleId === conversation.id,
       onToggleChecked: toggleSelectedConversation,
       onConversationClick: handleConversationClick,
@@ -214,8 +217,9 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
       batchMode,
       isConversationGenerating,
       hasCompletionUnread,
+      hasAttentionUnread,
       selectedConversationIds,
-      id,
+      activeConversationId,
       dropdownVisibleId,
       toggleSelectedConversation,
       handleConversationClick,

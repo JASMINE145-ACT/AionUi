@@ -6,6 +6,11 @@
 
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
+import {
+  type ConversationAttentionEvent,
+  parseActiveConversationIdFromPath,
+  shouldNotifyConversationAttention,
+} from '@/renderer/pages/conversation/GroupedHistory/utils/conversationAttention';
 import { addEventListener } from '@/renderer/utils/emitter';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
@@ -99,14 +104,18 @@ type ConversationListSyncSnapshot = {
   conversations: TChatConversation[];
   generatingConversationIds: Set<string>;
   completionUnreadConversationIds: Set<string>;
+  permissionUnreadConversationIds: Set<string>;
 };
 
 const listeners = new Set<() => void>();
+const attentionSubscribers = new Set<(event: ConversationAttentionEvent) => void>();
 
 let isStoreInitialized = false;
 let conversationsState: TChatConversation[] = [];
 let generatingConversationIdsState = new Set<string>();
 let completionUnreadConversationIdsState = new Set<string>();
+let permissionUnreadConversationIdsState = new Set<string>();
+let permissionPendingCountsState = new Map<string, number>();
 let completedConversationIdsState = new Set<string>();
 let conversation_idsState = new Set<string>();
 let activeConversationIdState: string | null = null;
@@ -114,6 +123,7 @@ let snapshotState: ConversationListSyncSnapshot = {
   conversations: conversationsState,
   generatingConversationIds: generatingConversationIdsState,
   completionUnreadConversationIds: completionUnreadConversationIdsState,
+  permissionUnreadConversationIds: permissionUnreadConversationIdsState,
 };
 
 const emitStoreChange = () => {
@@ -121,8 +131,34 @@ const emitStoreChange = () => {
     conversations: conversationsState,
     generatingConversationIds: generatingConversationIdsState,
     completionUnreadConversationIds: completionUnreadConversationIdsState,
+    permissionUnreadConversationIds: permissionUnreadConversationIdsState,
   };
   listeners.forEach((listener) => listener());
+};
+
+const ATTENTION_COMPLETION_DEDUP_MS = 3000;
+let lastCompletionAttentionAt = new Map<string, number>();
+
+const emitAttentionEvent = (event: ConversationAttentionEvent) => {
+  if (event.kind === 'completion') {
+    const lastAt = lastCompletionAttentionAt.get(event.conversation_id) ?? 0;
+    const now = Date.now();
+    if (now - lastAt < ATTENTION_COMPLETION_DEDUP_MS) {
+      return;
+    }
+    lastCompletionAttentionAt.set(event.conversation_id, now);
+  }
+
+  attentionSubscribers.forEach((listener) => listener(event));
+};
+
+export const subscribeConversationAttentionEvents = (
+  listener: (event: ConversationAttentionEvent) => void,
+): (() => void) => {
+  attentionSubscribers.add(listener);
+  return () => {
+    attentionSubscribers.delete(listener);
+  };
 };
 
 const subscribeConversationListSync = (listener: () => void) => {
@@ -187,13 +223,24 @@ const clearGenerating = (conversation_id: string) => {
   emitStoreChange();
 };
 
+const getConversationDisplayName = (conversation_id: string): string | undefined => {
+  return conversationsState.find((conversation) => conversation.id === conversation_id)?.name;
+};
+
 const markCompletionUnread = (conversation_id: string) => {
-  if (completionUnreadConversationIdsState.has(conversation_id)) {
-    return;
+  const isNew = !completionUnreadConversationIdsState.has(conversation_id);
+  if (isNew) {
+    completionUnreadConversationIdsState = new Set(completionUnreadConversationIdsState).add(conversation_id);
+    emitStoreChange();
   }
 
-  completionUnreadConversationIdsState = new Set(completionUnreadConversationIdsState).add(conversation_id);
-  emitStoreChange();
+  if (shouldNotifyConversationAttention(conversation_id, activeConversationIdState)) {
+    emitAttentionEvent({
+      kind: 'completion',
+      conversation_id,
+      title: getConversationDisplayName(conversation_id),
+    });
+  }
 };
 
 const clearCompletionUnreadState = (conversation_id: string) => {
@@ -205,6 +252,51 @@ const clearCompletionUnreadState = (conversation_id: string) => {
   next.delete(conversation_id);
   completionUnreadConversationIdsState = next;
   emitStoreChange();
+};
+
+const markPermissionUnread = (conversation_id: string, attention?: Pick<ConversationAttentionEvent, 'title' | 'description'>) => {
+  const nextCount = (permissionPendingCountsState.get(conversation_id) ?? 0) + 1;
+  permissionPendingCountsState = new Map(permissionPendingCountsState);
+  permissionPendingCountsState.set(conversation_id, nextCount);
+
+  if (!permissionUnreadConversationIdsState.has(conversation_id)) {
+    permissionUnreadConversationIdsState = new Set(permissionUnreadConversationIdsState).add(conversation_id);
+    emitStoreChange();
+  }
+
+  if (shouldNotifyConversationAttention(conversation_id, activeConversationIdState)) {
+    emitAttentionEvent({
+      kind: 'permission',
+      conversation_id,
+      title: attention?.title ?? getConversationDisplayName(conversation_id),
+      description: attention?.description,
+    });
+  }
+};
+
+const clearPermissionUnreadState = (conversation_id: string) => {
+  permissionPendingCountsState = new Map(permissionPendingCountsState);
+  permissionPendingCountsState.delete(conversation_id);
+
+  if (!permissionUnreadConversationIdsState.has(conversation_id)) {
+    return;
+  }
+
+  const next = new Set(permissionUnreadConversationIdsState);
+  next.delete(conversation_id);
+  permissionUnreadConversationIdsState = next;
+  emitStoreChange();
+};
+
+const decrementPermissionPending = (conversation_id: string) => {
+  const current = permissionPendingCountsState.get(conversation_id) ?? 0;
+  if (current <= 1) {
+    clearPermissionUnreadState(conversation_id);
+    return;
+  }
+
+  permissionPendingCountsState = new Map(permissionPendingCountsState);
+  permissionPendingCountsState.set(conversation_id, current - 1);
 };
 
 const markCompleted = (conversation_id: string) => {
@@ -239,12 +331,20 @@ const setActiveConversationState = (conversation_id: string | null) => {
   activeConversationIdState = conversation_id;
 };
 
-const initializeConversationListSyncStore = () => {
+export const initializeConversationListSyncStore = () => {
   if (isStoreInitialized) {
     return;
   }
 
   isStoreInitialized = true;
+
+  if (typeof window !== 'undefined') {
+    // HashRouter stores the virtual path in window.location.hash (e.g. "#/conversation/abc").
+    // window.location.pathname is always "/" under HashRouter, so we must strip the "#" prefix.
+    const hashPath = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.pathname;
+    activeConversationIdState = parseActiveConversationIdFromPath(hashPath);
+  }
+
   refreshConversations();
 
   addEventListener('chat.history.refresh', refreshConversations);
@@ -252,9 +352,29 @@ const initializeConversationListSyncStore = () => {
     if (event.action === 'deleted') {
       clearGenerating(event.conversation_id);
       clearCompletionUnreadState(event.conversation_id);
+      clearPermissionUnreadState(event.conversation_id);
       clearCompleted(event.conversation_id);
     }
     refreshConversations();
+  });
+  ipcBridge.conversation.confirmation.add.on((confirmation) => {
+    const conversation_id = confirmation.conversation_id;
+    if (!conversation_id) {
+      return;
+    }
+
+    if (shouldNotifyConversationAttention(conversation_id, activeConversationIdState)) {
+      markPermissionUnread(conversation_id, {
+        title: confirmation.title,
+        description: confirmation.description,
+      });
+    }
+  });
+  ipcBridge.conversation.confirmation.remove.on(({ conversation_id }) => {
+    if (!conversation_id) {
+      return;
+    }
+    decrementPermissionPending(conversation_id);
   });
   ipcBridge.conversation.responseStream.on((message) => {
     const conversation_id = message.conversation_id;
@@ -305,14 +425,15 @@ export const useConversationListSync = () => {
     initializeConversationListSyncStore();
   }, []);
 
-  const { conversations, generatingConversationIds, completionUnreadConversationIds } = useSyncExternalStore(
-    subscribeConversationListSync,
-    getConversationListSyncSnapshot,
-    getConversationListSyncSnapshot
-  );
+  const { conversations, generatingConversationIds, completionUnreadConversationIds, permissionUnreadConversationIds } =
+    useSyncExternalStore(subscribeConversationListSync, getConversationListSyncSnapshot, getConversationListSyncSnapshot);
 
   const clearCompletionUnread = useCallback((conversation_id: string) => {
     clearCompletionUnreadState(conversation_id);
+  }, []);
+
+  const clearPermissionUnread = useCallback((conversation_id: string) => {
+    clearPermissionUnreadState(conversation_id);
   }, []);
 
   const setActiveConversation = useCallback((conversation_id: string | null) => {
@@ -333,11 +454,30 @@ export const useConversationListSync = () => {
     [completionUnreadConversationIds]
   );
 
+  const hasPermissionUnread = useCallback(
+    (conversation_id: string) => {
+      return permissionUnreadConversationIds.has(conversation_id);
+    },
+    [permissionUnreadConversationIds]
+  );
+
+  const hasAttentionUnread = useCallback(
+    (conversation_id: string) => {
+      return (
+        completionUnreadConversationIds.has(conversation_id) || permissionUnreadConversationIds.has(conversation_id)
+      );
+    },
+    [completionUnreadConversationIds, permissionUnreadConversationIds]
+  );
+
   return {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasPermissionUnread,
+    hasAttentionUnread,
     clearCompletionUnread,
+    clearPermissionUnread,
     setActiveConversation,
   };
 };

@@ -6,7 +6,10 @@
 
 import React, { createContext, useContext, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useConversationListSync } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
+import {
+  initializeConversationListSyncStore,
+  useConversationListSync,
+} from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import type { GroupedHistoryResult } from '@/renderer/pages/conversation/GroupedHistory/types';
 import { buildGroupedHistory } from '@/renderer/pages/conversation/GroupedHistory/utils/groupingHelpers';
 
@@ -17,6 +20,7 @@ export type ConversationHistoryContextValue = ReturnType<typeof useConversationL
 const ConversationHistoryContext = createContext<ConversationHistoryContextValue | null>(null);
 
 export const ConversationHistoryProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  initializeConversationListSyncStore();
   const { t } = useTranslation();
   const conversationListSync = useConversationListSync();
 

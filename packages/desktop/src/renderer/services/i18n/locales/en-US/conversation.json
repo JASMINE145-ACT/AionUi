@@ -19,6 +19,12 @@
     "skillsMarketDesc": "Search and activate community Skills on demand. Configure once, available for all agents.",
     "skillsMarketDetails": "View More >>"
   },
+  "attention": {
+    "permissionTitle": "{{name}} needs approval",
+    "permissionBody": "Agent is waiting for your confirmation.",
+    "completionTitle": "{{name}}",
+    "completionBody": "Agent has finished responding."
+  },
   "history": {
     "recents": "Recents",
     "noHistory": "No chat history",
