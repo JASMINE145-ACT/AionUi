@@ -1,26 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureCcbSessionPreferredMode } from '@/common/config/ensureCcbSessionPreferredMode';
+import {
+  assertCcbSessionPreferredModeApplied,
+  ensureCcbSessionPreferredMode,
+} from '@/common/config/ensureCcbSessionPreferredMode';
 
-const { getModeInvokeMock, setModeInvokeMock } = vi.hoisted(() => ({
-  getModeInvokeMock: vi.fn(),
-  setModeInvokeMock: vi.fn(),
+const { getModeMock, setModeMock } = vi.hoisted(() => ({
+  getModeMock: vi.fn(),
+  setModeMock: vi.fn(),
 }));
 
-vi.mock('@/common/adapter/ipcBridge', () => ({
-  acpConversation: {
-    getMode: { invoke: getModeInvokeMock },
-    setMode: { invoke: setModeInvokeMock },
-  },
+vi.mock('@/common/adapter/acpConfigOptionsAdapter', () => ({
+  acpAdapterGetMode: getModeMock,
+  acpAdapterSetMode: setModeMock,
 }));
 
 describe('ensureCcbSessionPreferredMode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setModeInvokeMock.mockResolvedValue({ mode: 'bypassPermissions' });
+    setModeMock.mockResolvedValue({ mode: 'bypassPermissions' });
   });
 
   it('calls setMode when backend mode differs from Guid selection', async () => {
-    getModeInvokeMock.mockResolvedValue({ mode: 'default', initialized: true });
+    getModeMock.mockResolvedValue({ mode: 'default', initialized: true });
 
     const result = await ensureCcbSessionPreferredMode({
       conversation_id: 'conv-1',
@@ -32,14 +33,11 @@ describe('ensureCcbSessionPreferredMode', () => {
       previous_backend_mode: 'default',
       confirmed_mode: 'bypassPermissions',
     });
-    expect(setModeInvokeMock).toHaveBeenCalledWith({
-      conversation_id: 'conv-1',
-      mode: 'bypassPermissions',
-    });
+    expect(setModeMock).toHaveBeenCalledWith('conv-1', 'bypassPermissions');
   });
 
   it('skips setMode when backend already matches preferred mode', async () => {
-    getModeInvokeMock.mockResolvedValue({ mode: 'bypassPermissions', initialized: true });
+    getModeMock.mockResolvedValue({ mode: 'bypassPermissions', initialized: true });
 
     const result = await ensureCcbSessionPreferredMode({
       conversation_id: 'conv-1',
@@ -50,6 +48,28 @@ describe('ensureCcbSessionPreferredMode', () => {
       status: 'already_applied',
       backend_mode: 'bypassPermissions',
     });
-    expect(setModeInvokeMock).not.toHaveBeenCalled();
+    expect(setModeMock).not.toHaveBeenCalled();
+  });
+
+  it('assert throws when ensure failed', () => {
+    expect(() =>
+      assertCcbSessionPreferredModeApplied(
+        { status: 'failed', error: 'setMode rejected' },
+        'bypassPermissions',
+      ),
+    ).toThrow('setMode rejected');
+  });
+
+  it('assert throws when confirmed mode differs from preferred', () => {
+    expect(() =>
+      assertCcbSessionPreferredModeApplied(
+        {
+          status: 'applied',
+          previous_backend_mode: 'default',
+          confirmed_mode: 'default',
+        },
+        'bypassPermissions',
+      ),
+    ).toThrow('Permission mode not confirmed');
   });
 });

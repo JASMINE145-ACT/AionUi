@@ -5,9 +5,11 @@ import {
   warmupConversation,
 } from '@/renderer/pages/conversation/utils/warmupConversation';
 
-const { warmupInvokeMock, stageFromConversationMock } = vi.hoisted(() => ({
+const { warmupInvokeMock, stageFromConversationMock, stageEmployeeProfileMock, prepareContinuityMock } = vi.hoisted(() => ({
   warmupInvokeMock: vi.fn(),
   stageFromConversationMock: vi.fn(),
+  stageEmployeeProfileMock: vi.fn(),
+  prepareContinuityMock: vi.fn(),
 }));
 
 vi.mock('@/common', () => ({
@@ -16,12 +18,32 @@ vi.mock('@/common', () => ({
       warmup: {
         invoke: warmupInvokeMock,
       },
+      get: {
+        invoke: vi.fn().mockResolvedValue({ extra: {} }),
+      },
     },
   },
 }));
 
+vi.mock('@/common/adapter/ipcBridge', () => ({
+  ccbModelService: {
+    stageConversationIdentity: {
+      invoke: vi.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
+
+vi.mock('@/common/config/conversationContinuity', () => ({
+  prepareConversationContinuity: prepareContinuityMock,
+  persistConversationContinuityBinding: vi.fn().mockResolvedValue({}),
+}));
+
 vi.mock('@/common/utils/ccbPresetConversationExtra', () => ({
   stageCcbAssistantProfileFromConversation: stageFromConversationMock,
+}));
+
+vi.mock('@/common/utils/stageEmployeeProfileForSession', () => ({
+  stageEmployeeProfileForSession: stageEmployeeProfileMock,
 }));
 
 describe('warmupConversation', () => {
@@ -29,13 +51,20 @@ describe('warmupConversation', () => {
     vi.clearAllMocks();
     resetWarmupConversationStateForTests();
     stageFromConversationMock.mockResolvedValue(undefined);
+    stageEmployeeProfileMock.mockResolvedValue(undefined);
     warmupInvokeMock.mockResolvedValue(undefined);
+    prepareContinuityMock.mockResolvedValue({
+      ccbAuthority: false,
+      forceWarmup: false,
+      needsRefresh: false,
+    });
   });
 
-  it('stages CCB profile before warmup invoke', async () => {
+  it('stages CCB profile and employee profile before warmup invoke', async () => {
     await warmupConversation('conv-1');
 
     expect(stageFromConversationMock).toHaveBeenCalledWith('conv-1');
+    expect(stageEmployeeProfileMock).toHaveBeenCalled();
     expect(warmupInvokeMock).toHaveBeenCalledWith({ conversation_id: 'conv-1' });
   });
 
@@ -49,7 +78,7 @@ describe('warmupConversation', () => {
 
     const first = warmupConversation('conv-1');
     const second = warmupConversation('conv-1');
-    await Promise.resolve();
+    await vi.waitUntil(() => warmupInvokeMock.mock.calls.length >= 1);
 
     expect(warmupInvokeMock).toHaveBeenCalledTimes(1);
     expect(warmupInvokeMock).toHaveBeenCalledWith({ conversation_id: 'conv-1' });

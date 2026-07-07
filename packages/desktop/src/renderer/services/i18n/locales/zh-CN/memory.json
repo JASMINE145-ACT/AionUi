@@ -1,0 +1,35 @@
+{
+  "title": "记忆",
+  "subtitle": "Agent 从会话中沉淀的工作习惯与偏好，供后续对话自动引用。",
+  "scopeTabs": "记忆范围",
+  "fileList": "记忆文件",
+  "filesHeading": "文件",
+  "tab": {
+    "personal": "个人",
+    "business": "业务"
+  },
+  "save": "保存",
+  "saved": "已保存",
+  "saveFailed": "保存失败",
+  "loadFailed": "无法加载记忆文件",
+  "loadTimeout": "加载超时：请完全重启 AionUI（主进程需加载记忆 IPC）。",
+  "unsaved": "未保存",
+  "savedState": "已同步",
+  "lineCount": "{{count}} 行",
+  "ccbRequired": "记忆文件位于 CCB-Wanding 配置目录，当前未启用 CCB 运行时。",
+  "businessEmpty": "暂无业务记忆。1.1.7 仅自动沉淀 personal；业务纠偏仍走知识库 / append_business_rule。",
+  "personalEmpty": "暂无 personal 记忆文件。请先运行 ensure / 安装 seed。",
+  "selectFile": "选择左侧文件查看",
+  "selectFileHint": "从左侧列表选择 Markdown 文件，查看或编辑内容。",
+  "fileDesc": {
+    "profile": "个人画像与偏好",
+    "workflow": "工作流与习惯",
+    "default": "Markdown 记忆文件"
+  },
+  "empty": {
+    "personalTitle": "暂无个人记忆",
+    "businessTitle": "暂无业务记忆",
+    "personalHint": "运行 CCB ensure / 安装 seed，或让 Agent 在会话结束时自动学习沉淀。",
+    "businessHint": "业务规则请通过「知识库」或 append_business_rule 维护。"
+  }
+}

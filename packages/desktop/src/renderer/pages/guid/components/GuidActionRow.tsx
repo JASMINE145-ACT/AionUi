@@ -261,15 +261,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             },
           }}
         >
-          {allSkills.length === 0 ? (
-            <Menu.Item key='skills-empty' disabled>
-              <span className='text-13px text-t-secondary'>
-                {t('conversation.welcome.ccbSkillsEmpty', {
-                  defaultValue: 'No CCB-Wanding skills yet. Import them in Settings → Skills Hub.',
-                })}
-              </span>
-            </Menu.Item>
-          ) : isCcbCapabilities ? (
+          {isCcbCapabilities ? (
             <>
               {(sessionSkillNames?.length ?? 0) === 0 ? (
                 <Menu.Item key='skills-session-empty' disabled className='!cursor-default'>
@@ -280,17 +272,15 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
                   </span>
                 </Menu.Item>
               ) : (
-                allSkills
-                  .filter((skill) => isSkillChecked(skill))
-                  .map((skill) => (
-                    <Menu.Item
-                      key={`skill-session-${skill.name}`}
-                      disabled
-                      className='!cursor-default'
-                    >
-                      <span className='text-13px'>{skill.name}</span>
-                    </Menu.Item>
-                  ))
+                sessionSkillNames!.map((name) => (
+                  <Menu.Item
+                    key={`skill-session-${name}`}
+                    disabled
+                    className='!cursor-default'
+                  >
+                    <span className='text-13px'>{name}</span>
+                  </Menu.Item>
+                ))
               )}
               <Menu.Item key='ccb-open-skills-settings'>
                 <span className='text-13px text-t-secondary'>
@@ -307,6 +297,14 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
                 </span>
               </Menu.Item>
             </>
+          ) : allSkills.length === 0 ? (
+            <Menu.Item key='skills-empty' disabled>
+              <span className='text-13px text-t-secondary'>
+                {t('conversation.welcome.ccbSkillsEmpty', {
+                  defaultValue: 'No CCB-Wanding skills yet. Import them in Settings → Skills Hub.',
+                })}
+              </span>
+            </Menu.Item>
           ) : (
             allSkills.map((skill) => (
               <Menu.Item

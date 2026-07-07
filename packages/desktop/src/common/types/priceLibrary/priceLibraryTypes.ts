@@ -46,6 +46,7 @@ export interface PriceProductFields {
   pe_factory_price?: number | null;
   unit: string;
   volume?: number | null;
+  supplier?: string | null;
   raw_json?: string | null;
 }
 
@@ -118,5 +119,6 @@ export const PRICE_LIBRARY_COLUMNS: PriceLibraryColumnDef[] = [
   { key: 'pe_factory_price', titleKey: 'priceLibrary.column.peFactory', width: 110, isNumeric: true },
   { key: 'unit', titleKey: 'priceLibrary.column.unit', width: 64 },
   { key: 'volume', titleKey: 'priceLibrary.column.volume', width: 80, isNumeric: true },
+  { key: 'supplier', titleKey: 'priceLibrary.column.supplier', width: 180 },
   { key: 'raw_json', titleKey: 'priceLibrary.column.rawJson', width: 120 },
 ];

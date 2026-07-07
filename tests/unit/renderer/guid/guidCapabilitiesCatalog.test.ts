@@ -9,6 +9,7 @@ import type { CcbSkillInfo } from '@/common/config/ccbSkillsShared';
 import type { IMcpServer } from '@/common/config/storage';
 import {
   mapCcbSkillsToGuidCatalog,
+  mergeConversationLoadedSkills,
   resolveCcbMcpAllowlistIds,
   resolveEnabledMcpServerIds,
   resolveSessionEffectiveMcpServerIds,
@@ -128,6 +129,27 @@ describe('guidCapabilitiesCatalog', () => {
     expect(resolveSessionEffectiveSkillNames(['officecli-docx', 'cron'], ['officecli-docx'])).toEqual([
       'officecli-docx',
     ]);
+  });
+
+  it('shows agent-bound skills even when absent from Guid catalog scan', () => {
+    expect(
+      resolveSessionEffectiveSkillNames(['cron', 'officecli'], ['quotation-learn-by-data']),
+    ).toEqual(['quotation-learn-by-data']);
+  });
+
+  it('prefers catalog casing for allowlisted skills', () => {
+    expect(
+      resolveSessionEffectiveSkillNames(['Quotation-Learn-By-Data'], ['quotation-learn-by-data']),
+    ).toEqual(['Quotation-Learn-By-Data']);
+  });
+
+  it('merges agent-bound skills before platform snapshot for conversation display', () => {
+    expect(
+      mergeConversationLoadedSkills(
+        ['aionui-skills', 'cron', 'quotation-learn-by-data'],
+        ['quotation-learn-by-data'],
+      ),
+    ).toEqual(['quotation-learn-by-data', 'aionui-skills', 'cron']);
   });
 
   it('falls back to agent sidecar MCP allowlist when detail is empty', () => {

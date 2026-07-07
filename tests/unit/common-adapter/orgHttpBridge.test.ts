@@ -14,6 +14,7 @@ import {
   getOrgBaseUrl,
   getOrgBearerToken,
   isOrgServerConfigured,
+  orgHttpDelete,
   orgHttpRequest,
 } from '@/common/adapter/orgHttpBridge';
 
@@ -100,5 +101,26 @@ describe('orgHttpBridge', () => {
     vi.spyOn(ssoMode, 'isUnifiedOrgSsoEnabled').mockReturnValue(true);
     vi.spyOn(authSession, 'getSessionToken').mockReturnValue('unified-jwt-token');
     expect(getOrgBearerToken()).toBe('unified-jwt-token');
+  });
+
+  it('orgHttpDelete sends DELETE via orgHttpRequest', async () => {
+    (globalThis as { __orgServerUrl?: string }).__orgServerUrl = 'http://org.local:13401';
+    vi.spyOn(orgAuthSession, 'getOrgSessionToken').mockReturnValue('org-test-token');
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: null }),
+      text: async () => '',
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await orgHttpDelete<void, { id: string }>((p) => `/api/work-tasks/${p.id}`).invoke({ id: 'wt_1' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://org.local:13401/api/work-tasks/wt_1',
+      expect.objectContaining({ method: 'DELETE' })
+    );
   });
 });

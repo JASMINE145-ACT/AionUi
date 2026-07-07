@@ -116,14 +116,57 @@ export function resolveSessionEffectiveMcpServerIds(
 /**
  * Skill names active for the current agent profile this session.
  * Empty allowlist → none (matches CCB assistant profile skill filter).
+ * Agent-bound allowlist entries are always shown; catalog supplies canonical casing when present.
  */
 export function resolveSessionEffectiveSkillNames(
   catalogSkillNames: string[],
   skillsAllowlist: string[],
 ): string[] {
   if (skillsAllowlist.length === 0) return [];
-  const allowed = new Set(skillsAllowlist.map((name) => name.trim().toLowerCase()));
-  return catalogSkillNames.filter((name) => allowed.has(name.trim().toLowerCase()));
+  const catalogByLower = new Map(
+    catalogSkillNames.map((name) => [name.trim().toLowerCase(), name] as const),
+  );
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of skillsAllowlist) {
+    const key = raw.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(catalogByLower.get(key) ?? raw.trim());
+  }
+  return result;
+}
+
+/** Platform snapshot ∪ agent-bound skills for conversation SendBox display (deduped, agent first). */
+export function mergeConversationLoadedSkills(
+  platformSkills: string[],
+  agentBoundSkills: string[],
+): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [...agentBoundSkills, ...platformSkills]) {
+    const key = raw.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(raw.trim());
+  }
+  return result;
+}
+
+export function partitionAgentBoundSkillNames(
+  sessionSkillNames: string[],
+  platformSkillNames: string[],
+): { agentBound: string[]; platform: string[] } {
+  const agentLower = new Set(sessionSkillNames.map((name) => name.trim().toLowerCase()));
+  const platform: string[] = [];
+  const seenPlatform = new Set<string>();
+  for (const raw of platformSkillNames) {
+    const key = raw.trim().toLowerCase();
+    if (!key || agentLower.has(key) || seenPlatform.has(key)) continue;
+    seenPlatform.add(key);
+    platform.push(raw.trim());
+  }
+  return { agentBound: [...sessionSkillNames], platform };
 }
 
 /** Prefer resolved assistant detail; fall back to raw CCB agent sidecar allowlist. */

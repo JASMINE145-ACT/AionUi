@@ -24,6 +24,7 @@ import agent from './agent.json';
 import team from './team.json';
 import pet from './pet.json';
 import orgKnowledge from './orgKnowledge.json';
+import memory from './memory.json';
 import orgDatabase from './orgDatabase.json';
 import priceLibrary from './priceLibrary.json';
 import workTasks from './workTasks.json';
@@ -51,6 +52,7 @@ export default {
   team,
   pet,
   orgKnowledge,
+  memory,
   orgDatabase,
   priceLibrary,
   workTasks,

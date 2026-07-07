@@ -11,7 +11,7 @@ import { goToSettings, waitForSettle } from '../../../helpers/navigation';
 import { takeScreenshot } from '../../../helpers/screenshots';
 
 const PROMPT_TIMEOUT_DEFAULT = 300;
-const AGENT_IDLE_TIMEOUT_DEFAULT = 5;
+const AGENT_IDLE_TIMEOUT_DEFAULT = 60;
 
 function promptTimeoutInput(page: import('@playwright/test').Page) {
   return page

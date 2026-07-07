@@ -9,11 +9,14 @@ import { initDialogBridge } from './dialogBridge';
 import { initUpdateBridge } from './updateBridge';
 import { initSystemSettingsBridge } from './systemSettingsBridge';
 import { initWindowControlsBridge } from './windowControlsBridge';
+import { initAppBadgeBridge } from './appBadgeBridge';
 import { initNotificationBridge } from './notificationBridge';
 import { initWebuiBridge } from './webuiBridge';
 import { initThemeBridge } from './themeBridge';
 import { initCcbAgentsBridge } from './ccbAgentsBridge';
 import { initCcbAssistantProfilesBridge } from './ccbAssistantProfilesBridge';
+import { initCcbEmployeeProfileBridge } from './ccbEmployeeProfileBridge';
+import { initCcbPersonalMemoryBridge } from './ccbPersonalMemoryBridge';
 import { initCcbMcpBridge } from './ccbMcpBridge';
 import { initCcbModelBridge } from './ccbModelBridge';
 import { initCcbSkillsBridge } from './ccbSkillsBridge';
@@ -29,12 +32,15 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initUpdateBridge();
   initSystemSettingsBridge();
   initNotificationBridge();
+  initAppBadgeBridge();
   initWebuiBridge();
   initThemeBridge();
   initCcbModelBridge();
   initCcbMcpBridge();
   initCcbAgentsBridge();
   initCcbAssistantProfilesBridge();
+  initCcbEmployeeProfileBridge();
+  initCcbPersonalMemoryBridge();
   initCcbSkillsBridge();
   initCcbUpdateBridge();
 }
@@ -42,6 +48,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
 export {
   initApplicationBridge,
   initDialogBridge,
+  initAppBadgeBridge,
   initNotificationBridge,
   initSystemSettingsBridge,
   initThemeBridge,

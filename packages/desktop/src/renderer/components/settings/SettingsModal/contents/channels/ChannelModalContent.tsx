@@ -23,7 +23,7 @@ import DingTalkConfigForm from './DingTalkConfigForm';
 import LarkConfigForm from './LarkConfigForm';
 import TelegramConfigForm from './TelegramConfigForm';
 import WeixinConfigForm from './WeixinConfigForm';
-import WecomConfigForm from './WecomConfigForm';
+import WecomAibotExtensionPanel from './WecomAibotExtensionPanel';
 
 type ChannelModelConfigKey =
   | 'assistant.telegram.defaultModel'
@@ -244,10 +244,22 @@ const ChannelModalContent: React.FC = () => {
     }
   }, []);
 
+  const wecomAutoExpandedRef = useRef(false);
+
   // Initial load
   useEffect(() => {
     void loadPluginStatus();
   }, [loadPluginStatus]);
+
+  // Auto-expand WeCom extension card once when first discovered
+  useEffect(() => {
+    if (wecomAutoExpandedRef.current || !extensionStatuses['ext-wecom-aibot']) return;
+    wecomAutoExpandedRef.current = true;
+    setCollapseKeys((prev) => ({
+      ...prev,
+      'ext-wecom-aibot': false,
+    }));
+  }, [extensionStatuses]);
 
   useEffect(() => {
     const loadWebuiStatus = async () => {
@@ -481,26 +493,37 @@ const ChannelModalContent: React.FC = () => {
         if (enabled) {
           const fieldValues = extensionFieldValues[pluginType] || {};
           const credentialFields = (status.extensionMeta?.credentialFields || []) as ExtensionFieldSchema[];
-          const missingField = credentialFields.find((field) => {
-            if (!field.required) return false;
-            const value = fieldValues[field.key];
-            if (field.type === 'boolean') return value === undefined;
-            return value === undefined || value === '';
-          });
+          if (!status.hasToken) {
+            const missingField = credentialFields.find((field) => {
+              if (!field.required) return false;
+              const value = fieldValues[field.key];
+              if (field.type === 'boolean') return value === undefined;
+              return value === undefined || value === '';
+            });
 
-          if (missingField) {
-            Message.warning(
-              t('settings.channels.extension.requiredField', {
-                defaultValue: 'Please fill required field: {{field}}',
-                field: missingField.label,
-              })
-            );
-            return;
+            if (missingField) {
+              Message.warning(
+                t('settings.channels.extension.requiredField', {
+                  defaultValue: 'Please fill required field: {{field}}',
+                  field: missingField.label,
+                })
+              );
+              return;
+            }
           }
+
+          const enableConfig = status.hasToken
+            ? Object.fromEntries(
+                Object.entries(fieldValues).filter(([, value]) => {
+                  if (value === undefined || value === '') return false;
+                  return true;
+                })
+              )
+            : fieldValues;
 
           await channel.enablePlugin.invoke({
             plugin_id: status.id || pluginType,
-            config: fieldValues,
+            config: enableConfig,
           });
 
           Message.success(
@@ -545,6 +568,17 @@ const ChannelModalContent: React.FC = () => {
       const publicBaseUrl =
         typeof values.publicBaseUrl === 'string' ? values.publicBaseUrl.trim().replace(/\/+$/, '') : '';
       const publicCallbackUrl = publicBaseUrl ? `${publicBaseUrl}${callbackPath}` : null;
+
+      if (pluginType === 'ext-wecom-aibot') {
+        return (
+          <WecomAibotExtensionPanel
+            status={status}
+            fields={fields}
+            values={values}
+            onFieldChange={(key, value) => updateExtensionFieldValue(pluginType, key, value)}
+          />
+        );
+      }
 
       if (fields.length === 0) {
         return (
@@ -721,14 +755,27 @@ const ChannelModalContent: React.FC = () => {
       id: 'wecom',
       title: t('settings.channels.wecomTitle', 'WeCom'),
       description: t('settings.channels.wecomDesc', 'Chat with AionUi assistant via WeCom (Enterprise WeChat)'),
-      status: 'coming_soon' as const,
+      status: 'active',
       enabled: false,
       disabled: true,
       content: (
-        <div className='text-14px text-t-secondary py-12px'>
-          {t('settings.channels.comingSoonDesc', 'Support for {{channel}} is coming soon', {
-            channel: t('settings.channels.wecomTitle', 'WeCom'),
-          })}
+        <div className='space-y-10px py-4px' data-wecom-fallback-panel='true'>
+          <div className='text-12px leading-relaxed p-10px rd-8px bg-[rgba(var(--primary-6),0.06)] border border-[rgba(var(--primary-6),0.2)] text-t-secondary'>
+            <div className='font-500 text-t-primary mb-6px'>
+              {t('settings.channels.wecomAibot.longConnTitle', { defaultValue: 'Long-connection mode' })}
+            </div>
+            <div>
+              {t('settings.channels.wecomAibot.extensionRequired', {
+                defaultValue:
+                  'Load the ext-wecom-aibot extension (just dev-ext) to configure Bot ID, Secret, and agent binding here.',
+              })}
+            </div>
+          </div>
+          <div className='text-13px text-t-secondary'>
+            {t('settings.channels.wecomAibot.fallbackFields', {
+              defaultValue: 'Required: Bot ID, Secret from WeCom admin · Optional: WebSocket URL, group @ filter',
+            })}
+          </div>
         </div>
       ),
     };
@@ -753,6 +800,8 @@ const ChannelModalContent: React.FC = () => {
       }));
 
     const extensionTypeSet = new Set(extensionChannels.map((channel) => String(channel.id).toLowerCase()));
+    const hideBuiltinWecom =
+      extensionTypeSet.has('ext-wecom-aibot') || extensionTypeSet.has('ext-wecom-bot');
     const comingSoonChannels: ChannelConfig[] = [
       {
         id: 'slack',
@@ -791,7 +840,7 @@ const ChannelModalContent: React.FC = () => {
       larkChannel,
       dingtalkChannel,
       weixinChannel,
-      wecomChannel,
+      ...(hideBuiltinWecom ? [] : [wecomChannel]),
       ...extensionChannels,
       ...comingSoonChannels,
     ];

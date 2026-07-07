@@ -1,3 +1,4 @@
+export { default as SiderMemoryEntry } from './SiderMemoryEntry';
 export { default as SiderOrgKnowledgeEntry } from './SiderOrgKnowledgeEntry';
 export { default as SiderPriceLibraryEntry } from './SiderPriceLibraryEntry';
 export { default as SiderScheduledEntry } from './SiderScheduledEntry';

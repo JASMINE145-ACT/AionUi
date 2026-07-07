@@ -28,6 +28,8 @@ export type CcbAgentRecord = {
   schema_version: 1;
   guid_primary?: boolean;
   delegatable?: boolean;
+  /** When true, hide from Guid catalog unless caller passes isPriceAdmin */
+  requires_price_admin?: boolean;
   enabled: boolean;
   avatar?: string;
   sort_order?: number;
@@ -184,6 +186,7 @@ function serializeAgentSidecar(record: CcbAgentRecord): Record<string, unknown> 
     agent_id: record.id,
     guid_primary: record.guid_primary === true,
     delegatable: record.delegatable !== false,
+    ...(record.requires_price_admin === true ? { requires_price_admin: true } : {}),
     enabled: record.enabled !== false,
     ...(record.avatar?.trim() ? { avatar: record.avatar.trim() } : {}),
     ...(record.display_name?.trim() ? { display_name: record.display_name.trim() } : {}),
@@ -232,6 +235,7 @@ export function materializeCcbAgentRecordForSave(
     schema_version: 1,
     guid_primary: input.guid_primary ?? existing?.guid_primary,
     delegatable: input.delegatable ?? existing?.delegatable,
+    requires_price_admin: input.requires_price_admin ?? existing?.requires_price_admin,
     enabled: input.enabled ?? existing?.enabled ?? true,
     ...(input.display_name !== undefined
       ? input.display_name?.trim()
@@ -349,6 +353,7 @@ export function normalizeCcbAgentRecord(
     schema_version: 1,
     guid_primary: sidecar.guid_primary === true,
     delegatable: sidecar.delegatable !== false,
+    ...(sidecar.requires_price_admin === true ? { requires_price_admin: true } : {}),
     enabled: sidecar.enabled !== false,
     ...(typeof sidecar.avatar === 'string' && sidecar.avatar.trim()
       ? { avatar: sidecar.avatar.trim() }

@@ -4,16 +4,14 @@ import type { CcbModelInfo } from '@/common/config/ccbModelSettings';
 import { CCB_MINIMAX_M3_CATALOG } from '@/common/config/ccbModelSettings';
 import { ensureCcbSessionPreferredModel } from '@/common/config/ensureCcbSessionPreferredModel';
 
-const { getModelInvokeMock, setModelInvokeMock } = vi.hoisted(() => ({
-  getModelInvokeMock: vi.fn(),
-  setModelInvokeMock: vi.fn(),
+const { getModelMock, setModelMock } = vi.hoisted(() => ({
+  getModelMock: vi.fn(),
+  setModelMock: vi.fn(),
 }));
 
-vi.mock('@/common/adapter/ipcBridge', () => ({
-  acpConversation: {
-    getModel: { invoke: getModelInvokeMock },
-    setModel: { invoke: setModelInvokeMock },
-  },
+vi.mock('@/common/adapter/acpConfigOptionsAdapter', () => ({
+  acpAdapterGetModel: getModelMock,
+  acpAdapterSetModel: setModelMock,
 }));
 
 const ccbMiniMax: CcbModelInfo = {
@@ -35,20 +33,20 @@ const sessionVariants = (current: string): AcpModelInfo => ({
 describe('ensureCcbSessionPreferredModel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setModelInvokeMock.mockResolvedValue({
+    setModelMock.mockResolvedValue({
       model_info: sessionVariants('minimax-m3-thinking'),
     });
   });
 
   it('calls setModel when session options still use effort tiers', async () => {
-    getModelInvokeMock.mockResolvedValue({
+    getModelMock.mockResolvedValue({
       model_info: {
         current_model_id: 'minimax-m3-thinking',
         current_model_label: 'Thinking',
         available_models: [{ id: 'minimax-m3/default', label: 'Default' }],
       },
     });
-    setModelInvokeMock.mockResolvedValue({
+    setModelMock.mockResolvedValue({
       model_info: sessionVariants('minimax-m3'),
     });
 
@@ -59,14 +57,11 @@ describe('ensureCcbSessionPreferredModel', () => {
     });
 
     expect(result.status).toBe('applied');
-    expect(setModelInvokeMock).toHaveBeenCalledWith({
-      conversation_id: 'conv-1',
-      model_id: 'minimax-m3',
-    });
+    expect(setModelMock).toHaveBeenCalledWith('conv-1', 'minimax-m3');
   });
 
   it('calls setModel when backend is minimax-m3 but preferred is thinking', async () => {
-    getModelInvokeMock.mockResolvedValue({
+    getModelMock.mockResolvedValue({
       model_info: sessionVariants('minimax-m3'),
     });
 
@@ -81,14 +76,11 @@ describe('ensureCcbSessionPreferredModel', () => {
       previous_backend_model_id: 'minimax-m3',
       confirmed_model_id: 'minimax-m3-thinking',
     });
-    expect(setModelInvokeMock).toHaveBeenCalledWith({
-      conversation_id: 'conv-1',
-      model_id: 'minimax-m3-thinking',
-    });
+    expect(setModelMock).toHaveBeenCalledWith('conv-1', 'minimax-m3-thinking');
   });
 
   it('skips setModel when backend already matches preferred variant', async () => {
-    getModelInvokeMock.mockResolvedValue({
+    getModelMock.mockResolvedValue({
       model_info: sessionVariants('minimax-m3-thinking'),
     });
 
@@ -102,6 +94,6 @@ describe('ensureCcbSessionPreferredModel', () => {
       status: 'already_applied',
       backend_model_id: 'minimax-m3-thinking',
     });
-    expect(setModelInvokeMock).not.toHaveBeenCalled();
+    expect(setModelMock).not.toHaveBeenCalled();
   });
 });

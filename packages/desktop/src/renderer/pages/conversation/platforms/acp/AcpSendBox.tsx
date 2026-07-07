@@ -1,7 +1,17 @@
 import { ipcBridge } from '@/common';
 import type { IConversationMcpStatus } from '@/common/config/storage';
 import { ensureCcbSessionPreferredModel } from '@/common/config/ensureCcbSessionPreferredModel';
-import { ensureCcbSessionPreferredMode } from '@/common/config/ensureCcbSessionPreferredMode';
+import {
+  assertCcbSessionPreferredModeApplied,
+  ensureCcbSessionPreferredMode,
+} from '@/common/config/ensureCcbSessionPreferredMode';
+import {
+  getCcbSessionPreferredMode,
+  persistCcbSessionPreferredMode,
+  seedCcbSessionPreferredMode,
+  setCcbSessionPreferredMode,
+} from '@/common/config/ccbSessionPreferredModeStore';
+import { resolveEffectiveAcpSessionMode } from '@/common/config/resolveEffectiveAcpSessionMode';
 import { normalizeCcbMiniMaxModelId } from '@/common/config/ccbAcpModelInfo';
 import { getCcbSessionPreferredModelId } from '@/common/config/ccbSessionPreferredModelStore';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
@@ -142,6 +152,11 @@ const AcpSendBox: React.FC<{
     }));
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const [currentMode, setCurrentMode] = useState<string | undefined>(session_mode);
+
+  useEffect(() => {
+    seedCcbSessionPreferredMode(conversation_id, session_mode);
+  }, [conversation_id, session_mode]);
+
   const prepareRuntimeSync = useCallback(async (options?: { force?: boolean }) => {
     if (teamPermission) {
       await teamPermission.warmupSession();
@@ -165,6 +180,43 @@ const AcpSendBox: React.FC<{
     onSelectModelFailed: () => Message.error(t('agent.model.switchFailed')),
   });
   const availableAgentModes = useAgentModesForBackend(backend);
+
+  // Keep send-time mode aligned with AgentModeSelector / backend getMode (not only create-time extra).
+  useEffect(() => {
+    if (!conversation_id || !ccbAuthorityActive) return;
+    let cancelled = false;
+    void prepareRuntimeSync()
+      .then(() => ipcBridge.acpConversation.getMode.invoke({ conversation_id }))
+      .then((result) => {
+        if (cancelled || !result) return;
+        if (result.initialized !== false && result.mode) {
+          setCurrentMode(result.mode);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [ccbAuthorityActive, conversation_id, prepareRuntimeSync]);
+
+  const handleAgentModeChanged = useCallback(
+    (mode: string) => {
+      setCurrentMode(mode);
+      setCcbSessionPreferredMode(conversation_id, mode);
+      void persistCcbSessionPreferredMode(conversation_id, mode);
+      if (isLeaderInTeam) teamPermission?.propagateMode?.(mode);
+    },
+    [conversation_id, isLeaderInTeam, teamPermission]
+  );
+
+  const resolvePreferredSessionMode = useCallback(
+    () =>
+      resolveEffectiveAcpSessionMode(
+        getCcbSessionPreferredMode(conversation_id, currentMode),
+        session_mode,
+      ),
+    [conversation_id, currentMode, session_mode]
+  );
 
   // Mirror AgentModeSelector's getMode sync so the sheet shows the live mode label.
   useEffect(() => {
@@ -193,6 +245,8 @@ const AcpSendBox: React.FC<{
         const confirmed = await ipcBridge.acpConversation.setMode.invoke({ conversation_id, mode });
         const confirmedMode = confirmed.mode || mode;
         setCurrentMode(confirmedMode);
+        setCcbSessionPreferredMode(conversation_id, confirmedMode);
+        void persistCcbSessionPreferredMode(conversation_id, confirmedMode);
         if (backend && !assistantId) void savePreferredMode(backend, confirmedMode);
         if (isLeaderInTeam) teamPermission?.propagateMode?.(confirmedMode);
         Message.success(t('agentMode.switchSuccess'));
@@ -321,11 +375,13 @@ const AcpSendBox: React.FC<{
               ccbModelInfo,
             });
           }
-          if (session_mode) {
-            await ensureCcbSessionPreferredMode({
+          const preferredMode = resolvePreferredSessionMode();
+          if (preferredMode) {
+            const modeResult = await ensureCcbSessionPreferredMode({
               conversation_id,
-              preferredMode: session_mode,
+              preferredMode,
             });
+            assertCcbSessionPreferredModeApplied(modeResult, preferredMode);
           }
         }
         void checkAndUpdateTitle(conversation_id, input);
@@ -420,7 +476,7 @@ Please check your local CLI tool authentication status`,
         emitter.emit('acp.workspace.refresh');
       }
     },
-    [ccbAuthorityActive, ccbModelInfo, checkAndUpdateTitle, conversation_id, initialModelId, prepareRuntimeSync, resetState, runtimeView, setAiProcessing, startupReadiness.canSend, t, teamPermission, workspacePath]
+    [ccbAuthorityActive, ccbModelInfo, checkAndUpdateTitle, conversation_id, initialModelId, prepareRuntimeSync, resetState, resolvePreferredSessionMode, runtimeView, setAiProcessing, startupReadiness.canSend, t, teamPermission, workspacePath]
   );
 
   const {
@@ -723,7 +779,7 @@ Please check your local CLI tool authentication status`,
               modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
               compactLabelPrefix={t('agentMode.permission')}
               hideCompactLabelPrefixOnMobile
-              onModeChanged={isLeaderInTeam ? teamPermission?.propagateMode : undefined}
+              onModeChanged={handleAgentModeChanged}
               beforeRuntimeSync={prepareRuntimeSync}
               persistGlobalPreference={!assistantId}
             />

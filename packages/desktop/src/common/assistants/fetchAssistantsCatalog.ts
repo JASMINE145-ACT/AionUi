@@ -5,18 +5,38 @@
  */
 
 import { assistants, ccbAgentsService, ccbModelService } from '@/common/adapter/ipcBridge';
+import { getOrgBearerToken, isOrgServerConfigured, orgRawFetch } from '@/common/adapter/orgHttpBridge';
 import { assistantFromCcbAgent, filterGuidCatalogAgents } from '@/common/config/ccbAgentCatalog';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 
 export const ASSISTANTS_LIST_SWR_KEY = 'assistants.list' as const;
+
+/** Probe org draft GET — 200 ⇒ price_admin; 403 ⇒ hide admin-only Guid cards. */
+export async function resolveIsOrgPriceAdmin(): Promise<boolean> {
+  if (!isOrgServerConfigured()) return false;
+  const token = getOrgBearerToken();
+  if (!token) return false;
+  try {
+    const response = await orgRawFetch('GET', '/api/price-library/draft', undefined, {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 /** Preset assistant catalog — CCB agent files when authority active, else backend /api/assistants. */
 export async function fetchAssistantsCatalog(): Promise<Assistant[]> {
   const ccbAuthorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
 
   if (ccbAuthorityActive) {
-    const ccbAgents = await ccbAgentsService.listAgents.invoke();
-    return filterGuidCatalogAgents(ccbAgents)
+    const [ccbAgents, isPriceAdmin] = await Promise.all([
+      ccbAgentsService.listAgents.invoke(),
+      resolveIsOrgPriceAdmin().catch(() => false),
+    ]);
+    return filterGuidCatalogAgents(ccbAgents, { isPriceAdmin })
       .map((agent, index) => assistantFromCcbAgent(agent, index))
       .sort((a, b) => {
         const aOrder = typeof a.sort_order === 'number' ? a.sort_order : Number.MAX_SAFE_INTEGER;

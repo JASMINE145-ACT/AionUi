@@ -33,8 +33,22 @@ test.describe('Extension: Channel Plugins', () => {
     await waitForSettle(page);
 
     const body = await page.locator('body').textContent();
-    // The channel plugin may not surface in built-in UI
     expect(body!.length).toBeGreaterThan(50);
+    // Primary WeCom path: ext-wecom-aibot extension card (long connection)
+    expect(body).toMatch(/企业微信 AI Bot|ext-wecom-aibot|长连接/i);
+  });
+
+  test('builtin wecom coming-soon hidden when extension loaded', async ({ page }) => {
+    await goToChannelsTab(page);
+    await waitForSettle(page);
+
+    const body = await page.locator('body').textContent() || '';
+    const hasAibotExt = /企业微信 AI Bot|ext-wecom-aibot|长连接/i.test(body);
+    test.skip(!hasAibotExt, 'ext-wecom-aibot not loaded in this run');
+
+    // Deprecated builtin stub id should not duplicate WeCom coming-soon card
+    const wecomComingSoon = body.includes('WeCom') && (body.includes('Coming Soon') || body.includes('即将上线'));
+    expect(wecomComingSoon).toBe(false);
   });
 
   test('channel toggle switches are present', async ({ page }) => {

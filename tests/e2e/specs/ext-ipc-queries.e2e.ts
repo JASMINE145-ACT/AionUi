@@ -217,7 +217,7 @@ test.describe('Extension IPC: Channel Plugins', () => {
     expect(extPlugins.length).toBeGreaterThanOrEqual(2);
 
     const types = extPlugins.map((p) => p.type);
-    expect(types).toEqual(expect.arrayContaining(['e2e-test-channel', 'ext-feishu']));
+    expect(types).toEqual(expect.arrayContaining(['e2e-test-channel', 'ext-feishu', 'ext-wecom-aibot']));
   });
 
   test('extension channel plugin has credentialFields and configFields', async ({ page }) => {
@@ -232,6 +232,13 @@ test.describe('Extension IPC: Channel Plugins', () => {
     const configKeys = e2eChannel!.extensionMeta?.configFields?.map((f) => f.key) ?? [];
     expect(configKeys).toContain('pollingInterval');
     expect(configKeys).toContain('enableDebug');
+
+    const aibot = statuses.find((s) => s.type === 'ext-wecom-aibot');
+    expect(aibot).toBeTruthy();
+    const aibotCredKeys = aibot!.extensionMeta?.credentialFields?.map((f) => f.key) ?? [];
+    expect(aibotCredKeys).toEqual(expect.arrayContaining(['botId', 'secret']));
+    const aibotConfigKeys = aibot!.extensionMeta?.configFields?.map((f) => f.key) ?? [];
+    expect(aibotConfigKeys).toContain('wsUrl');
   });
 });
 

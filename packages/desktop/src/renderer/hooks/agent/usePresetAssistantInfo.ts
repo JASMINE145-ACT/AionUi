@@ -9,9 +9,11 @@ import { useTranslation } from 'react-i18next';
 import type { TChatConversation } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
 import { ccbAgentsService } from '@/common/adapter/ipcBridge';
+import { CCB_DEFAULT_SESSION_AGENT_ID } from '@/common/config/ccbAgentCatalog';
 import { ASSISTANTS_LIST_SWR_KEY, fetchAssistantsCatalog } from '@/common/assistants/fetchAssistantsCatalog';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import CoworkLogo from '@/renderer/assets/icons/cowork.svg';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import { DETECTED_AGENTS_SWR_KEY, fetchDetectedAgents, type AgentMetadata } from '@/renderer/utils/model/agentTypes';
 import useSWR from 'swr';
@@ -111,6 +113,34 @@ export function resolvePresetId(conversation: TChatConversation): string | null 
     return resolved;
   }
 
+  return null;
+}
+
+/**
+ * Preset id for sidebar avatar lookup — includes CCB default-route sessions that
+ * predate ccb_agent_id metadata (Guid send without a preset card selected).
+ */
+export function resolveSidebarPresetLookupId(
+  conversation: TChatConversation,
+  options?: { ccbAuthorityActive?: boolean }
+): string | null {
+  const presetId = resolvePresetId(conversation);
+  if (presetId) return presetId;
+  if (!options?.ccbAuthorityActive || conversation.type !== 'acp') return null;
+
+  const extra = conversation.extra as {
+    backend?: string;
+    agent_id?: string;
+    custom_agent_id?: string;
+  } | undefined;
+  const rowAgentId =
+    (typeof extra?.agent_id === 'string' && extra.agent_id.trim()) ||
+    (typeof extra?.custom_agent_id === 'string' && extra.custom_agent_id.trim()) ||
+    '';
+  if (rowAgentId) return null;
+
+  const backend = typeof extra?.backend === 'string' && extra.backend.trim() ? extra.backend.trim() : 'claude';
+  if (backend === 'claude') return CCB_DEFAULT_SESSION_AGENT_ID;
   return null;
 }
 
@@ -252,14 +282,17 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
   isLoading: boolean;
 } {
   const { i18n } = useTranslation();
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
 
   // Merged assistant catalog — CCB agent files when authority active (same as Guid cards).
   const { data: assistantsList, isLoading: isLoadingAssistants } = useSWR(ASSISTANTS_LIST_SWR_KEY, () =>
     fetchAssistantsCatalog().catch(() => [] as Assistant[])
   );
 
-  const presetIdForCcbLookup = conversation ? resolvePresetId(conversation) : null;
-  const { data: ccbAgentRecord } = useSWR(
+  const presetIdForCcbLookup = conversation
+    ? resolveSidebarPresetLookupId(conversation, { ccbAuthorityActive })
+    : null;
+  const { data: ccbAgentRecord, isLoading: isLoadingCcbAgent } = useSWR(
     presetIdForCcbLookup ? (['ccbAgentsService.getAgent', presetIdForCcbLookup] as const) : null,
     () => ccbAgentsService.getAgent.invoke({ id: presetIdForCcbLookup! })
   );
@@ -315,7 +348,7 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
       }
     }
 
-    const presetId = resolvePresetId(conversation);
+    const presetId = resolveSidebarPresetLookupId(conversation, { ccbAuthorityActive });
     const locale = i18n.language || 'en-US';
 
     if (!presetId) {
@@ -349,7 +382,7 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     }
 
     // Still loading — defer to avoid flickering fallback to Claude logo
-    if (isLoadingAssistants || isLoadingExtAdapters)
+    if (isLoadingAssistants || isLoadingExtAdapters || isLoadingCcbAgent)
       return { info: null as PresetAssistantInfo | null, isLoading: true };
 
     // Extension ACP adapters (custom_agent_id like ext:{extensionName}:{adapterId})
@@ -385,5 +418,7 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     isLoadingRemoteAgent,
     detectedAgents,
     ccbAgentRecord,
+    ccbAuthorityActive,
+    isLoadingCcbAgent,
   ]);
 }

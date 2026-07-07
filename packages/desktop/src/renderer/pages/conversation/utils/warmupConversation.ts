@@ -1,5 +1,12 @@
 import { ipcBridge } from '@/common';
+import { ccbModelService } from '@/common/adapter/ipcBridge';
+import {
+  persistConversationContinuityBinding,
+  prepareConversationContinuity,
+} from '@/common/config/conversationContinuity';
+import { stageEmployeeProfileForSession } from '@/common/utils/stageEmployeeProfileForSession';
 import { stageCcbAssistantProfileFromConversation } from '@/common/utils/ccbPresetConversationExtra';
+import { Message } from '@arco-design/web-react';
 
 export type WarmupConversationPhase = 'idle' | 'preparing' | 'ready' | 'error';
 
@@ -51,14 +58,20 @@ export function subscribeWarmupConversation(conversation_id: string, listener: (
   };
 }
 
-export function warmupConversation(conversation_id: string, options: { force?: boolean } = {}): Promise<void> {
+export async function warmupConversation(
+  conversation_id: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const continuity = await prepareConversationContinuity(conversation_id, options);
+  const effectiveForce = Boolean(options.force) || continuity.forceWarmup;
+
   const existing = warmupByConversation.get(conversation_id);
-  if (existing && !options.force) {
+  if (existing && !effectiveForce) {
     return existing;
   }
 
   const previous = getWarmupConversationStatus(conversation_id);
-  if (previous.phase === 'ready' && !options.force) {
+  if (previous.phase === 'ready' && !effectiveForce) {
     return Promise.resolve();
   }
   const nextAttempt = previous.attempt + 1;
@@ -67,9 +80,33 @@ export function warmupConversation(conversation_id: string, options: { force?: b
     attempt: nextAttempt,
   });
 
-  const promise = stageCcbAssistantProfileFromConversation(conversation_id)
+  const promise = ccbModelService.stageConversationIdentity
+    .invoke({ conversation_id })
+    .catch((error: unknown) => {
+      console.warn('[warmupConversation] stageConversationIdentity failed:', error);
+    })
+    .then(() => stageCcbAssistantProfileFromConversation(conversation_id))
+    .then(() => stageEmployeeProfileForSession())
     .then(() => ipcBridge.conversation.warmup.invoke({ conversation_id }))
-    .then(() => {
+    .then(async () => {
+      if (continuity.needsRefresh && !continuity.refreshDeferred) {
+        const conversation = await ipcBridge.conversation.get
+          .invoke({ id: conversation_id })
+          .catch((): null => null);
+        const acpSessionId =
+          typeof conversation?.extra?.acp_session_id === 'string'
+            ? conversation.extra.acp_session_id.trim()
+            : undefined;
+        const persistResult = await persistConversationContinuityBinding(
+          conversation_id,
+          continuity.snapshot,
+          (conversation?.extra ?? {}) as Record<string, unknown>,
+          acpSessionId,
+        );
+        if (persistResult.userNotice) {
+          Message.info(persistResult.userNotice);
+        }
+      }
       setWarmupStatus(conversation_id, {
         phase: 'ready',
         attempt: nextAttempt,

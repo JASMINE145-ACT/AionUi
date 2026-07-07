@@ -9,7 +9,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { runCcbMcpHealthCheck } from './ccbMcpHealth';
+import { collectCcbMcpHealthFailedItems, runCcbMcpHealthCheck } from './ccbMcpHealth';
 import type {
   CcbStartupMcpWarmResult,
   CcbStartupReadinessPhase,
@@ -173,7 +173,7 @@ async function runPipeline(): Promise<CcbStartupReadinessStatus> {
   try {
     const configReport = await runCcbMcpHealthCheck({ probe: false });
     if (!configReport.ok) {
-      const failed = configReport.config.items.filter((i) => !i.ok).map((i) => i.id);
+      const failed = collectCcbMcpHealthFailedItems(configReport).map((i) => i.id);
       const finished: CcbStartupReadinessStatus = {
         phase: 'error',
         config_ok: false,

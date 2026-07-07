@@ -50,7 +50,8 @@ const CronJobSiderItem: React.FC<CronJobSiderItemProps> = ({
   const isMobile = layout?.isMobile ?? false;
   // Always fetch all child conversations regardless of mode
   const { conversations } = useCronJobConversations(job.id);
-  const { isConversationGenerating, hasCompletionUnread, clearCompletionUnread } = useConversationHistoryContext();
+  const { isConversationGenerating, hasCompletionUnread, hasAttentionUnread, clearCompletionUnread, clearPermissionUnread } =
+    useConversationHistoryContext();
 
   // Show all child conversations in both modes; include existingConversationProp as fallback
   const childConversations = useMemo(() => {
@@ -84,9 +85,10 @@ const CronJobSiderItem: React.FC<CronJobSiderItemProps> = ({
   const handleConversationClick = useCallback(
     (conv: TChatConversation) => {
       clearCompletionUnread(conv.id);
+      clearPermissionUnread(conv.id);
       onNavigate(`/conversation/${conv.id}`);
     },
-    [clearCompletionUnread, onNavigate]
+    [clearCompletionUnread, clearPermissionUnread, onNavigate]
   );
 
   const handleDelete = useCallback(
@@ -261,6 +263,7 @@ const CronJobSiderItem: React.FC<CronJobSiderItemProps> = ({
           conversation={conv}
           isGenerating={isConversationGenerating(conv.id)}
           hasCompletionUnread={hasCompletionUnread(conv.id)}
+          hasAttentionUnread={hasAttentionUnread(conv.id)}
           collapsed={false}
           tooltipEnabled={false}
           batchMode={false}
@@ -283,6 +286,7 @@ const CronJobSiderItem: React.FC<CronJobSiderItemProps> = ({
       isMobile,
       isConversationGenerating,
       hasCompletionUnread,
+      hasAttentionUnread,
       currentConversationId,
       dropdownVisibleId,
       handleConversationClick,

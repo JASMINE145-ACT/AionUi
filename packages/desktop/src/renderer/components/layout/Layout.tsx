@@ -18,6 +18,7 @@ import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHis
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/useNotificationClick';
 import { useConversationAttentionNotifications } from '@renderer/hooks/system/useConversationAttentionNotifications';
+import { useTaskbarAttentionBadge } from '@renderer/hooks/system/useTaskbarAttentionBadge';
 import { useDirectorySelection } from '@renderer/hooks/file/useDirectorySelection';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
@@ -113,6 +114,7 @@ const Layout: React.FC<{
   useDeepLink();
   useNotificationClick();
   useConversationAttentionNotifications();
+  useTaskbarAttentionBadge();
   const navigate = useNavigate();
   useConversationShortcuts({ navigate });
   const location = useLocation();
@@ -368,7 +370,7 @@ const Layout: React.FC<{
             </ArcoLayout.Sider>
 
             <ArcoLayout.Content
-              className={'bg-1 layout-content flex flex-col min-h-0'}
+              className={'bg-1 layout-content flex flex-col min-h-0 min-w-0 overflow-hidden'}
               onClick={() => {
                 if (isMobile && !collapsed) setCollapsed(true);
               }}

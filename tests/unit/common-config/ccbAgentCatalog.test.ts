@@ -36,4 +36,37 @@ describe('filterGuidCatalogAgents', () => {
       'custom',
     ]);
   });
+
+  it('hides price-library-agent when requires_price_admin and caller is not admin', () => {
+    const filtered = filterGuidCatalogAgents(
+      [
+        agent({
+          id: 'price-library-agent',
+          name: 'price-library-agent',
+          source: 'bundled',
+          guid_primary: true,
+          requires_price_admin: true,
+        }),
+        agent({ id: 'quotation-agent', name: 'quotation-agent', source: 'bundled', guid_primary: true }),
+      ],
+      { isPriceAdmin: false },
+    );
+    expect(filtered.map((item) => item.id)).toEqual(['quotation-agent']);
+  });
+
+  it('shows price-library-agent when isPriceAdmin is true', () => {
+    const filtered = filterGuidCatalogAgents(
+      [
+        agent({
+          id: 'price-library-agent',
+          name: 'price-library-agent',
+          source: 'bundled',
+          guid_primary: true,
+          requires_price_admin: true,
+        }),
+      ],
+      { isPriceAdmin: true },
+    );
+    expect(filtered.map((item) => item.id)).toEqual(['price-library-agent']);
+  });
 });

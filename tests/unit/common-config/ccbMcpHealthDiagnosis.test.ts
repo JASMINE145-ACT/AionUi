@@ -69,6 +69,64 @@ describe('ccbMcpHealthDiagnosis', () => {
     expect(diagnosis.repair_plan).toContain('repair-word-creator');
   });
 
+  it('maps CCB_PROJECT_ROOT failure to ensure-wanding-settings', () => {
+    const report = makeReport([
+      {
+        layer: 'config',
+        id: 'quotation.env.CCB_PROJECT_ROOT',
+        ok: false,
+        detail: 'python/main.py missing under D:\\wrong',
+      },
+    ]);
+    const diagnosis = diagnoseCcbMcpHealth(report);
+    expect(diagnosis.repair_plan).toEqual(['ensure-wanding-settings']);
+    expect(diagnosis.items[0]?.next_step).toBe('repair');
+  });
+
+  it('maps session missing mcp to new_guid next step', () => {
+    const report: CcbMcpHealthReport = {
+      ok: false,
+      checked_at: '2026-06-18T00:00:00.000Z',
+      config: { ok: true, items: [] },
+      session: {
+        ok: false,
+        items: [
+          {
+            layer: 'session',
+            id: 'word-creator',
+            ok: false,
+            detail: 'missing mcp: office-word',
+          },
+        ],
+      },
+    };
+    const diagnosis = diagnoseCcbMcpHealth(report);
+    expect(diagnosis.items[0]?.next_step).toBe('new_guid');
+    expect(diagnosis.minimax_prompt).toContain('会话探针');
+  });
+
+  it('maps .env.accurate file failure to ensure-wanding-settings', () => {
+    const report: CcbMcpHealthReport = {
+      ok: false,
+      checked_at: '2026-06-18T00:00:00.000Z',
+      config: { ok: true, items: [] },
+      files: {
+        ok: false,
+        items: [
+          {
+            layer: 'files',
+            id: 'quotation/vendor/wanding/.env.accurate',
+            ok: false,
+            detail: 'missing: D:\\CCB-Wanding\\vendor\\wanding\\.env.accurate',
+          },
+        ],
+      },
+    };
+    const diagnosis = diagnoseCcbMcpHealth(report);
+    expect(diagnosis.repair_plan).toEqual(['ensure-wanding-settings']);
+    expect(diagnosis.items[0]?.severity).toBe('fixable');
+  });
+
   it('includes auto-repair log in minimax prompt', () => {
     const report = makeReport([
       { layer: 'probe', id: 'office-word', ok: false, detail: 'connection failed' },

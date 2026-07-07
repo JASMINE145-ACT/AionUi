@@ -10,17 +10,33 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ccbMcpService } from '@/common/adapter/ipcBridge';
-import type { CcbMcpHealthReport, CcbMcpHealthRepairResult } from '@/common/config/ccbMcpHealth';
+import type {
+  CcbMcpHealthLayerResult,
+  CcbMcpHealthReport,
+  CcbMcpHealthRepairResult,
+} from '@/common/config/ccbMcpHealthShared';
 import type { CcbMcpHealthDiagnosis, CcbMcpHealthRepairActionId } from '@/common/config/ccbMcpHealthDiagnosis';
 import { buildMinimaxPromptForReport } from '@/common/config/ccbMcpHealthDiagnosis';
+import { CCB_MCP_HEALTH_COVERAGE_ROWS } from '@/common/config/ccbMcpHealthCoverage';
 import { isCcbMcpAuthorityActive, resetCcbMcpAuthorityCache } from '@/renderer/hooks/mcp/ccbMcpAuthority';
 import { iconColors } from '@/renderer/styles/colors';
 
-type LayerKey = 'config' | 'probe';
+type LayerKey = 'config' | 'files' | 'agents' | 'probe' | 'session' | 'optional';
 
 const layerLabelKey: Record<LayerKey, string> = {
-  config: 'settings.ccbMcpHealthLayerConfig',
+  config: 'settings.ccbMcpHealthLayerConfigOnly',
+  files: 'settings.ccbMcpHealthLayerFiles',
+  agents: 'settings.ccbMcpHealthLayerAgents',
   probe: 'settings.ccbMcpHealthLayerProbe',
+  session: 'settings.ccbMcpHealthLayerSession',
+  optional: 'settings.ccbMcpHealthLayerOptional',
+};
+
+const nextStepLabelKey: Record<NonNullable<CcbMcpHealthDiagnosis['items'][number]['next_step']>, string> = {
+  repair: 'settings.ccbMcpHealthNextStepRepair',
+  new_guid: 'settings.ccbMcpHealthNextStepNewGuid',
+  cli_session: 'settings.ccbMcpHealthNextStepCliSession',
+  manual: 'settings.ccbMcpHealthNextStepManual',
 };
 
 const repairActionLabelKey: Record<CcbMcpHealthRepairActionId, string> = {
@@ -31,12 +47,15 @@ const repairActionLabelKey: Record<CcbMcpHealthRepairActionId, string> = {
   'repair-subagent-mcp': 'settings.ccbMcpHealthActionRepairSubagent',
 };
 
-const StatusDot: React.FC<{ ok?: boolean; loading?: boolean }> = ({ ok, loading }) => {
+const StatusDot: React.FC<{ ok?: boolean; warn?: boolean; loading?: boolean }> = ({ ok, warn, loading }) => {
   if (loading) {
     return <LoadingOne fill={iconColors.primary} className='h-16px w-16px' />;
   }
   if (ok === true) {
     return <Check fill={iconColors.success} className='h-16px w-16px' />;
+  }
+  if (ok === false && warn) {
+    return <span className='inline-block w-8px h-8px rounded-full bg-[rgb(var(--warning-6))] shrink-0 mt-4px' />;
   }
   if (ok === false) {
     return <CloseSmall fill={iconColors.danger} className='h-16px w-16px' />;
@@ -44,9 +63,11 @@ const StatusDot: React.FC<{ ok?: boolean; loading?: boolean }> = ({ ok, loading 
   return <span className='inline-block w-8px h-8px rounded-full bg-[var(--color-fill-3)]' />;
 };
 
-const HealthItemRow: React.FC<{ item: { id: string; detail: string; ok?: boolean } }> = ({ item }) => (
+const HealthItemRow: React.FC<{ item: { id: string; detail: string; ok?: boolean; warn?: boolean } }> = ({
+  item,
+}) => (
   <div className='flex items-start gap-8px py-4px text-12px leading-18px'>
-    <StatusDot ok={item.ok} />
+    <StatusDot ok={item.ok} warn={item.warn} />
     <div className='min-w-0 flex-1'>
       <span className='text-t-primary font-mono'>{item.id}</span>
       <span className='text-t-secondary ml-6px'>{item.detail}</span>
@@ -74,6 +95,11 @@ const DiagnosisItemRow: React.FC<{
             {item.repair_action_ids.map((id) => t(repairActionLabelKey[id])).join(' · ')}
           </div>
         ) : null}
+        {item.next_step ? (
+          <div className='text-11px text-t-secondary mt-2px'>
+            {t('settings.ccbMcpHealthNextStep')}: {t(nextStepLabelKey[item.next_step])}
+          </div>
+        ) : null}
       </div>
     </div>
   </div>
@@ -86,6 +112,7 @@ const CcbMcpHealthPanel: React.FC = () => {
   const navigate = useNavigate();
   const [authorityState, setAuthorityState] = useState<AuthorityState>('loading');
   const [loading, setLoading] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(false);
   const [repairing, setRepairing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [report, setReport] = useState<CcbMcpHealthReport | null>(null);
@@ -106,23 +133,33 @@ const CcbMcpHealthPanel: React.FC = () => {
   const failedCount = diagnosis?.failed_count ?? 0;
   const repairPlan = diagnosis?.repair_plan ?? [];
 
-  const runCheck = useCallback(async (probe: boolean, options?: { keepRepairLog?: boolean }) => {
-    setLoading(true);
-    if (!options?.keepRepairLog) {
-      setLastRepair(null);
-    }
-    try {
-      const result = await ccbMcpService.runHealthCheck.invoke({ probe });
-      setReport(result);
-      return result;
-    } catch (error) {
-      console.error('[CcbMcpHealthPanel] health check failed:', error);
-      Message.error(t('settings.ccbMcpHealthCheckError'));
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+  const runCheck = useCallback(
+    async (options: { probe?: boolean; session?: boolean; keepRepairLog?: boolean }) => {
+      setLoading(true);
+      if (options.session) {
+        setSessionLoading(true);
+      }
+      if (!options.keepRepairLog) {
+        setLastRepair(null);
+      }
+      try {
+        const result = await ccbMcpService.runHealthCheck.invoke({
+          probe: Boolean(options.probe),
+          session: Boolean(options.session),
+        });
+        setReport(result);
+        return result;
+      } catch (error) {
+        console.error('[CcbMcpHealthPanel] health check failed:', error);
+        Message.error(t('settings.ccbMcpHealthCheckError'));
+        return null;
+      } finally {
+        setLoading(false);
+        setSessionLoading(false);
+      }
+    },
+    [t]
+  );
 
   const runRepair = useCallback(
     async (actionIds?: CcbMcpHealthRepairActionId[]) => {
@@ -135,7 +172,7 @@ const CcbMcpHealthPanel: React.FC = () => {
         } else {
           Message.warning(t('settings.ccbMcpHealthRepairPartial'));
         }
-        await runCheck(true, { keepRepairLog: true });
+        await runCheck({ probe: true, keepRepairLog: true });
         return result;
       } catch (error) {
         console.error('[CcbMcpHealthPanel] repair failed:', error);
@@ -163,7 +200,7 @@ const CcbMcpHealthPanel: React.FC = () => {
         setRepairing(false);
       }
 
-      const freshReport = await ccbMcpService.runHealthCheck.invoke({ probe: true });
+      const freshReport = await ccbMcpService.runHealthCheck.invoke({ probe: true, session: false });
       setReport(freshReport);
 
       if (freshReport.ok) {
@@ -196,31 +233,41 @@ const CcbMcpHealthPanel: React.FC = () => {
 
   useEffect(() => {
     if (authorityState !== 'active') return;
-    void runCheck(false);
+    void runCheck({ probe: false });
   }, [authorityState, runCheck]);
 
   const authorityInactive = authorityState === 'inactive' || authorityState === 'error';
 
-  const renderLayer = (key: LayerKey, items: CcbMcpHealthReport['config']['items'] | undefined, layerOk?: boolean) => {
-    if (!items?.length) return null;
+  const renderLayer = (key: LayerKey, layer: CcbMcpHealthLayerResult | undefined) => {
+    if (!layer?.items?.length) return null;
+    const warnCount = layer.items.filter((i) => !i.ok && i.warn).length;
+    const passCount = layer.items.filter((i) => i.ok).length;
+    const tagColor = layer.ok ? (warnCount > 0 ? 'orange' : 'green') : 'red';
     return (
       <Collapse.Item
         key={key}
         name={key}
         header={
           <div className='flex items-center gap-8px text-13px'>
-            <StatusDot ok={layerOk} />
+            <StatusDot ok={layer.ok} warn={layer.ok && warnCount > 0} />
             <span>{t(layerLabelKey[key])}</span>
-            <Tag size='small' color={layerOk ? 'green' : 'red'}>
-              {items.filter((i) => i.ok).length}/{items.length}
+            <Tag size='small' color={tagColor}>
+              {passCount}/{layer.items.length}
+              {warnCount > 0 ? ` (${warnCount} warn)` : ''}
             </Tag>
           </div>
         }
       >
-        <div className='pl-4px'>{items.map((item) => <HealthItemRow key={`${item.layer}-${item.id}`} item={item} />)}</div>
+        <div className='pl-4px'>
+          {layer.items.map((item) => (
+            <HealthItemRow key={`${item.layer}-${item.id}`} item={item} />
+          ))}
+        </div>
       </Collapse.Item>
     );
   };
+
+  const coverageYesNo = (value: boolean) => (value ? '✓' : '—');
 
   const repairPlanLabel = useMemo(
     () => repairPlan.map((id) => t(repairActionLabelKey[id])).join(' → '),
@@ -245,7 +292,11 @@ const CcbMcpHealthPanel: React.FC = () => {
         {authorityState === 'active' ? (
           <div className='flex items-center gap-6px shrink-0 flex-wrap justify-end'>
             <Tooltip content={t('settings.ccbMcpHealthQuickHint')}>
-              <Button size='mini' loading={loading && !report?.probe} onClick={() => void runCheck(false)}>
+              <Button
+                size='mini'
+                loading={loading && !report?.probe && !report?.session}
+                onClick={() => void runCheck({ probe: false })}
+              >
                 {t('settings.ccbMcpHealthQuick')}
               </Button>
             </Tooltip>
@@ -253,11 +304,21 @@ const CcbMcpHealthPanel: React.FC = () => {
               <Button
                 size='mini'
                 type='primary'
-                loading={loading}
+                loading={loading && !sessionLoading}
                 icon={<Tool size={14} />}
-                onClick={() => void runCheck(true)}
+                onClick={() => void runCheck({ probe: true })}
               >
                 {t('settings.ccbMcpHealthFull')}
+              </Button>
+            </Tooltip>
+            <Tooltip content={t('settings.ccbMcpHealthSessionHint')}>
+              <Button
+                size='mini'
+                type='outline'
+                loading={sessionLoading}
+                onClick={() => void runCheck({ probe: true, session: true })}
+              >
+                {t('settings.ccbMcpHealthSession')}
               </Button>
             </Tooltip>
           </div>
@@ -344,9 +405,45 @@ const CcbMcpHealthPanel: React.FC = () => {
       ) : null}
 
       {authorityState === 'active' && report ? (
-        <Collapse bordered={false} defaultActiveKey={['config', 'probe']} className='ccb-mcp-health-collapse'>
-          {renderLayer('config', report.config.items, report.config.ok)}
-          {report.probe ? renderLayer('probe', report.probe.items, report.probe.ok) : null}
+        <Collapse bordered={false} defaultActiveKey={['config', 'agents', 'probe']} className='ccb-mcp-health-collapse'>
+          {renderLayer('config', report.config)}
+          {renderLayer('files', report.files)}
+          {renderLayer('agents', report.agents)}
+          {renderLayer('probe', report.probe)}
+          {renderLayer('session', report.session)}
+          {renderLayer('optional', report.optional)}
+          <Collapse.Item name='coverage' header={t('settings.ccbMcpHealthCoverageTitle')}>
+            <div className='text-11px text-t-secondary mb-6px'>{t('settings.ccbMcpHealthCoverageHint')}</div>
+            <div className='overflow-x-auto'>
+              <table className='w-full text-11px border-collapse'>
+                <thead>
+                  <tr className='text-t-secondary text-left'>
+                    <th className='py-4px pr-8px'>{t('settings.ccbMcpHealthCoverageComponent')}</th>
+                    <th className='py-4px px-4px'>{t('settings.ccbMcpHealthCoverageQuick')}</th>
+                    <th className='py-4px px-4px'>{t('settings.ccbMcpHealthCoverageProbe')}</th>
+                    <th className='py-4px px-4px'>{t('settings.ccbMcpHealthCoverageDeep')}</th>
+                    <th className='py-4px px-4px'>{t('settings.ccbMcpHealthCoverageSession')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {CCB_MCP_HEALTH_COVERAGE_ROWS.map((row) => (
+                    <tr key={row.id} className='border-t border-border-2'>
+                      <td className='py-4px pr-8px font-mono text-t-primary'>
+                        {row.label}
+                        {row.notes ? (
+                          <span className='block text-t-secondary font-sans normal-case'>{row.notes}</span>
+                        ) : null}
+                      </td>
+                      <td className='py-4px px-4px text-center'>{coverageYesNo(row.uiQuick)}</td>
+                      <td className='py-4px px-4px text-center'>{coverageYesNo(row.uiProbe)}</td>
+                      <td className='py-4px px-4px text-center'>{coverageYesNo(row.uiDeep)}</td>
+                      <td className='py-4px px-4px text-center'>{coverageYesNo(row.uiSession)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Collapse.Item>
         </Collapse>
       ) : authorityState === 'active' && loading ? (
         <div className='flex items-center gap-8px text-12px text-t-secondary py-8px'>

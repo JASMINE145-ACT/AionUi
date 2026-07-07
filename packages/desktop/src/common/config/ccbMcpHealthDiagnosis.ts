@@ -6,7 +6,12 @@
  * Map MCP health failures → human diagnosis + whitelisted repair actions.
  */
 
-import type { CcbMcpHealthItem, CcbMcpHealthReport } from './ccbMcpHealth';
+import {
+  collectCcbMcpHealthFailedItems,
+  collectCcbMcpHealthWarnItems,
+  type CcbMcpHealthItem,
+  type CcbMcpHealthReport,
+} from './ccbMcpHealthShared';
 
 /** Whitelisted repair actions — only these may run from UI one-click repair. */
 export const CCB_MCP_HEALTH_REPAIR_ACTION_IDS = [
@@ -29,6 +34,8 @@ export type CcbMcpHealthDiagnosisItem = {
   /** fixable = whitelisted repair may help; manual = user/vendor action required */
   severity: 'fixable' | 'manual';
   repair_action_ids: CcbMcpHealthRepairActionId[];
+  /** UI hint: repair | new_guid | cli_session */
+  next_step?: 'repair' | 'new_guid' | 'cli_session' | 'manual';
 };
 
 export type CcbMcpHealthDiagnosis = {
@@ -64,6 +71,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
     repair_action_ids: [] as CcbMcpHealthRepairActionId[],
     severity: 'manual' as const,
     title: item.id,
+    next_step: 'manual' as const,
   };
 
   if (item.layer === 'config' && item.id.startsWith('mcp:')) {
@@ -71,15 +79,40 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
       ...base,
       title: `MCP 未注册：${item.id.slice(4)}`,
       severity: 'fixable',
+      next_step: 'repair',
       repair_action_ids: ['ensure-wanding-settings', 'repair-subagent-mcp'],
     };
   }
 
+  if (item.id === 'quotation.env.CCB_PROJECT_ROOT') {
+    return {
+      ...base,
+      title: '报价 MCP Python 路径错误',
+      severity: 'fixable',
+      next_step: 'repair',
+      repair_action_ids: ['ensure-wanding-settings'],
+    };
+  }
+
   if (item.layer === 'files') {
+    const isEnvAccurate =
+      item.id.includes('.env.accurate') ||
+      item.detail.includes('AOL_ACCESS_TOKEN parsed') ||
+      item.detail.includes('BOM');
+    if (isEnvAccurate) {
+      return {
+        ...base,
+        title: 'AOL 凭证文件 (.env.accurate) 异常',
+        severity: 'fixable',
+        next_step: 'repair',
+        repair_action_ids: ['ensure-wanding-settings'],
+      };
+    }
     return {
       ...base,
       title: `安装文件缺失：${item.id}`,
       severity: 'manual',
+      next_step: 'manual',
       repair_action_ids: [],
     };
   }
@@ -90,6 +123,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
         ...base,
         title: `专家助手未部署：${item.id}`,
         severity: 'fixable',
+        next_step: 'repair',
         repair_action_ids: ['deploy-seed-agents'],
       };
     }
@@ -101,6 +135,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
         ...base,
         title: `助手 MCP 白名单错误：${item.id}`,
         severity: 'fixable',
+        next_step: 'repair',
         repair_action_ids: actions,
       };
     }
@@ -109,9 +144,24 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
         ...base,
         title: `助手 sidecar 损坏：${item.id}`,
         severity: 'fixable',
+        next_step: 'repair',
         repair_action_ids: ['deploy-seed-agents'],
       };
     }
+  }
+
+  if (item.layer === 'session') {
+    const handoffHint =
+      item.detail.includes('handoff') ||
+      item.detail.includes('missing mcp') ||
+      item.detail.includes('profile handoff');
+    return {
+      ...base,
+      title: `ACP 会话 MCP 不匹配：${item.id}`,
+      severity: handoffHint ? 'fixable' : 'manual',
+      next_step: handoffHint ? 'new_guid' : 'cli_session',
+      repair_action_ids: handoffHint ? ['deploy-seed-agents', 'repair-subagent-mcp'] : [],
+    };
   }
 
   if (item.layer === 'probe') {
@@ -120,6 +170,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
         ...base,
         title: `MCP 已禁用：${item.id}`,
         severity: 'fixable',
+        next_step: 'repair',
         repair_action_ids: ['ensure-wanding-settings'],
       };
     }
@@ -128,6 +179,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
         ...base,
         title: `MCP 未注册：${item.id}`,
         severity: 'fixable',
+        next_step: 'repair',
         repair_action_ids: ['ensure-wanding-settings', 'repair-subagent-mcp'],
       };
     }
@@ -136,6 +188,16 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
         ...base,
         title: 'CCB CLI 或安装路径异常',
         severity: 'manual',
+        next_step: 'manual',
+        repair_action_ids: [],
+      };
+    }
+    if (item.id.endsWith(':deep')) {
+      return {
+        ...base,
+        title: `MCP 深探针失败：${item.id.replace(/:deep$/, '')}`,
+        severity: 'manual',
+        next_step: 'manual',
         repair_action_ids: [],
       };
     }
@@ -143,6 +205,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
       ...base,
       title: `MCP 进程探测失败：${item.id}`,
       severity: 'manual',
+      next_step: 'manual',
       repair_action_ids: [],
     };
   }
@@ -152,6 +215,7 @@ function diagnoseItem(item: CcbMcpHealthItem): CcbMcpHealthDiagnosisItem {
       ...base,
       title: 'CCB 配置文件异常',
       severity: 'fixable',
+      next_step: 'repair',
       repair_action_ids: ['ensure-wanding-settings'],
     };
   }
@@ -175,6 +239,8 @@ function buildMinimaxPrompt(
     '',
     `检查时间：${report.checked_at}`,
     `失败项：${diagnosis.failed_count}`,
+    `已运行探测：${report.probe ? '是（stdio + deep tools/call）' : '否'}`,
+    `已运行会话探针：${report.session ? '是（ACP profile allowlist）' : '否'}`,
   ];
 
   if (options?.autoRepair?.steps.length) {
@@ -184,11 +250,29 @@ function buildMinimaxPrompt(
     }
   }
 
+  const warnItems = collectCcbMcpHealthWarnItems(report);
+  if (warnItems.length) {
+    lines.push('', '## 可选组件警告（不阻塞 core 4 MCP）');
+    for (const item of warnItems) {
+      lines.push(`- [warn] ${item.id}: ${item.detail}`);
+    }
+  }
+
   lines.push('', '## 当前仍失败的项');
-  for (const item of diagnosis.items) {
-    lines.push(`- [${item.severity}] ${item.title}: ${item.detail}`);
-    if (item.repair_action_ids.length) {
-      lines.push(`  关联白名单动作：${item.repair_action_ids.join(', ')}`);
+  if (diagnosis.items.length === 0) {
+    lines.push('- （无阻塞失败项）');
+  } else {
+    for (const item of diagnosis.items) {
+      lines.push(`- [${item.severity}] ${item.title}: ${item.detail}`);
+      if (item.repair_action_ids.length) {
+        lines.push(`  关联白名单动作：${item.repair_action_ids.join(', ')}`);
+      }
+      if (item.next_step === 'new_guid') {
+        lines.push('  建议：新开对应专家 Guid 卡片（handoff 文件有效期 300s）');
+      }
+      if (item.next_step === 'cli_session') {
+        lines.push('  建议：运行 test-mcp-health.ps1 -Session 或 UI「会话探针」复检');
+      }
     }
   }
 
@@ -200,7 +284,7 @@ function buildMinimaxPrompt(
     '',
     report.ok
       ? '白名单修复后健康检查已通过。若 Guid 专家卡片仍缺 MCP 工具，请判断是否需要新开专家会话。'
-      : '请针对剩余失败项：1) 继续修复可自动处理的配置 2) 对 vendor/探测失败给出官方安装命令 3) 说明是否需新开专家 Guid 卡片。可直接在用户授权下执行文件修改或脚本。'
+      : '请针对剩余失败项：1) 继续修复可自动处理的配置 2) 对 vendor/探测失败给出官方安装命令 3) Session 层失败时说明是否需新开专家 Guid 卡片。可直接在用户授权下执行文件修改或脚本。'
   );
 
   return lines.join('\n');
@@ -212,17 +296,21 @@ export function buildMinimaxPromptForReport(
   options?: { autoRepair?: CcbMcpHealthAutoRepairContext }
 ): string {
   const diagnosis = diagnoseCcbMcpHealth(report);
-  if (diagnosis.ok && !options?.autoRepair?.steps.length) {
+  const warnCount = collectCcbMcpHealthWarnItems(report).length;
+  if (diagnosis.ok && !options?.autoRepair?.steps.length && warnCount === 0) {
     return '';
   }
   if (diagnosis.ok && options?.autoRepair) {
+    return buildMinimaxPrompt(report, diagnosis, options);
+  }
+  if (diagnosis.ok && warnCount > 0) {
     return buildMinimaxPrompt(report, diagnosis, options);
   }
   return buildMinimaxPrompt(report, diagnosis, options);
 }
 
 export function diagnoseCcbMcpHealth(report: CcbMcpHealthReport): CcbMcpHealthDiagnosis {
-  const failedItems = [...report.config.items, ...(report.probe?.items ?? [])].filter((item) => !item.ok);
+  const failedItems = collectCcbMcpHealthFailedItems(report);
 
   if (failedItems.length === 0) {
     return {

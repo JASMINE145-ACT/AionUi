@@ -14,24 +14,47 @@ import type {
 } from '@/common/types/workTasks/workTaskTypes';
 import { isWorkTaskManager } from '@/common/types/workTasks/workTaskTypes';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
+import { isOrgServerConfigured } from '@/common/adapter/orgHttpBridge';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
+
+/** SWR poll interval for org work tasks (decision D8: 30–60s). */
+export const WORK_TASKS_POLL_MS = 45_000;
 
 export type UseWorkTasksOptions = {
   statusFilter?: WorkTaskStatus;
   scope?: WorkTaskScope;
 };
 
+function isOrgWorkTasksUnavailableError(error: unknown): boolean {
+  if (!isOrgServerConfigured()) {
+    return true;
+  }
+  if (isBackendHttpError(error)) {
+    return [401, 403, 404, 501, 503].includes(error.status);
+  }
+  if (error instanceof TypeError) {
+    return true;
+  }
+  return false;
+}
+
 export function useWorkTasks(options: UseWorkTasksOptions = {}) {
   const { statusFilter, scope = 'visible' } = options;
   const { user } = useAuth();
   const ownerKey = user?.id ?? 'system_default_user';
-  const swrKey = `work-tasks/${ownerKey}/${scope}/${statusFilter ?? 'all'}`;
+  const swrKey = isOrgServerConfigured()
+    ? `work-tasks/org/${ownerKey}/${scope}/${statusFilter ?? 'all'}`
+    : null;
 
-  const [apiUnavailable, setApiUnavailable] = useState(false);
+  const [apiUnavailable, setApiUnavailable] = useState(!isOrgServerConfigured());
 
   const fetchTasks = useCallback(async () => {
+    if (!isOrgServerConfigured()) {
+      setApiUnavailable(true);
+      return [];
+    }
     try {
       const tasks = await ipcBridge.workTask.listTasks.invoke({
         ...(statusFilter ? { status: statusFilter } : {}),
@@ -40,7 +63,7 @@ export function useWorkTasks(options: UseWorkTasksOptions = {}) {
       setApiUnavailable(false);
       return tasks;
     } catch (error) {
-      if (isBackendHttpError(error) && (error.status === 404 || error.status === 501)) {
+      if (isOrgWorkTasksUnavailableError(error)) {
         setApiUnavailable(true);
         return [];
       }
@@ -50,19 +73,8 @@ export function useWorkTasks(options: UseWorkTasksOptions = {}) {
 
   const { data: tasks = [], isLoading, mutate, error } = useSWR<WorkTask[]>(swrKey, fetchTasks, {
     revalidateOnFocus: true,
+    refreshInterval: WORK_TASKS_POLL_MS,
   });
-
-  useEffect(() => {
-    const refresh = (): void => void mutate();
-    const unsubCreated = ipcBridge.workTask.onTaskCreated.on(refresh);
-    const unsubUpdated = ipcBridge.workTask.onTaskUpdated.on(refresh);
-    const unsubDeleted = ipcBridge.workTask.onTaskDeleted.on(refresh);
-    return () => {
-      unsubCreated();
-      unsubUpdated();
-      unsubDeleted();
-    };
-  }, [mutate]);
 
   const createTask = useCallback(
     async (params: Parameters<typeof ipcBridge.workTask.createTask.invoke>[0]) => {
@@ -108,10 +120,12 @@ export function useWorkTasks(options: UseWorkTasksOptions = {}) {
 }
 
 export function useWorkTaskMembers() {
+  const swrKey = isOrgServerConfigured() ? 'work-task-members/org' : null;
+
   const { data, isLoading, error } = useSWR<WorkTaskMember[]>(
-    'work-task-members',
+    swrKey,
     () => ipcBridge.workTask.listMembers.invoke(),
-    { revalidateOnFocus: false }
+    { revalidateOnFocus: true, refreshInterval: WORK_TASKS_POLL_MS }
   );
 
   const employees = useMemo(
@@ -123,24 +137,13 @@ export function useWorkTaskMembers() {
 }
 
 export function useWorkTaskQuery(enabled: boolean) {
-  const { data, isLoading, mutate, error } = useSWR<WorkTaskQueryResponse | null>(
-    enabled ? 'work-tasks/query' : null,
-    () => ipcBridge.workTask.queryTasks.invoke({}),
-    { revalidateOnFocus: true }
-  );
+  const swrKey = enabled && isOrgServerConfigured() ? 'work-tasks/query/org' : null;
 
-  useEffect(() => {
-    if (!enabled) return;
-    const refresh = (): void => void mutate();
-    const unsubUpdated = ipcBridge.workTask.onTaskUpdated.on(refresh);
-    const unsubCreated = ipcBridge.workTask.onTaskCreated.on(refresh);
-    const unsubDeleted = ipcBridge.workTask.onTaskDeleted.on(refresh);
-    return () => {
-      unsubUpdated();
-      unsubCreated();
-      unsubDeleted();
-    };
-  }, [enabled, mutate]);
+  const { data, isLoading, mutate, error } = useSWR<WorkTaskQueryResponse | null>(
+    swrKey,
+    () => ipcBridge.workTask.queryTasks.invoke({}),
+    { revalidateOnFocus: true, refreshInterval: WORK_TASKS_POLL_MS }
+  );
 
   return { query: data ?? undefined, loading: isLoading, error, mutate };
 }
@@ -148,9 +151,10 @@ export function useWorkTaskQuery(enabled: boolean) {
 export function usePendingAcceptCount() {
   const { user } = useAuth();
   const ownerKey = user?.id ?? 'system_default_user';
+  const swrKey = isOrgServerConfigured() ? `work-tasks/pending-count/org/${ownerKey}` : null;
 
   const { data = 0, mutate } = useSWR(
-    `work-tasks/pending-count/${ownerKey}`,
+    swrKey,
     async () => {
       try {
         const tasks = await ipcBridge.workTask.listTasks.invoke({
@@ -165,48 +169,26 @@ export function usePendingAcceptCount() {
     { refreshInterval: 60_000, revalidateOnFocus: true }
   );
 
-  useEffect(() => {
-    const refresh = (): void => void mutate();
-    const unsub = ipcBridge.workTask.onTaskUpdated.on(refresh);
-    const unsub2 = ipcBridge.workTask.onTaskCreated.on(refresh);
-    return () => {
-      unsub();
-      unsub2();
-    };
-  }, [mutate]);
-
   return data;
 }
 
 export function useWorkTaskRole() {
   const { user } = useAuth();
+  const role = user?.work_task_role ?? 'employee';
   return {
-    role: user?.work_task_role ?? 'manager',
-    isManager: isWorkTaskManager(user?.work_task_role ?? 'manager'),
+    role,
+    isManager: isWorkTaskManager(role),
   };
 }
 
 export function useWorkTask(taskId: string | undefined) {
-  const { data, isLoading, mutate, error } = useSWR<WorkTask | null>(
-    taskId ? `work-task/${taskId}` : null,
-    () => (taskId ? ipcBridge.workTask.getTask.invoke({ task_id: taskId }) : null),
-    { revalidateOnFocus: true }
-  );
+  const swrKey = taskId && isOrgServerConfigured() ? `work-task/org/${taskId}` : null;
 
-  useEffect(() => {
-    if (!taskId) return;
-    const refresh = (): void => void mutate();
-    const unsubUpdated = ipcBridge.workTask.onTaskUpdated.on((task) => {
-      if (task.id === taskId) refresh();
-    });
-    const unsubDeleted = ipcBridge.workTask.onTaskDeleted.on((payload) => {
-      if (payload.task_id === taskId) refresh();
-    });
-    return () => {
-      unsubUpdated();
-      unsubDeleted();
-    };
-  }, [mutate, taskId]);
+  const { data, isLoading, mutate, error } = useSWR<WorkTask | null>(
+    swrKey,
+    () => (taskId ? ipcBridge.workTask.getTask.invoke({ task_id: taskId }) : null),
+    { revalidateOnFocus: true, refreshInterval: WORK_TASKS_POLL_MS }
+  );
 
   return { task: data ?? undefined, loading: isLoading, error, mutate };
 }

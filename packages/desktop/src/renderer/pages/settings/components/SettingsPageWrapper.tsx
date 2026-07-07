@@ -16,6 +16,7 @@ import {
   Puzzle,
   Robot,
   System,
+  User,
 } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -67,6 +68,12 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       path: 'webui',
     },
     pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat theme='outline' size='16' />, path: 'pet' },
+    profile: {
+      id: 'profile',
+      label: t('settings.employeeProfile.nav', { defaultValue: 'Personal info' }),
+      icon: <User theme='outline' size='16' />,
+      path: 'profile',
+    },
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
     about: { id: 'about', label: t('settings.about'), icon: <Info theme='outline' size='16' />, path: 'about' },
   };

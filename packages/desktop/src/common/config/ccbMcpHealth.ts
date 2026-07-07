@@ -19,6 +19,7 @@ import { listCcbMcpServersWithHealth } from './ccbMcpSettings';
 import { resolveCcbClaudeConfigDir } from './ccbWandingRuntime';
 import {
   CCB_MCP_HEALTH_MANIFEST,
+  CCB_MCP_HEALTH_DEEP_PROBE_SERVERS,
   CCB_MCP_HEALTH_PROBE_SERVERS,
 } from './ccbMcpHealthManifest';
 import {
@@ -33,29 +34,45 @@ import {
   resolveCcbWandingInstallDir,
 } from './ccbWandingRuntimeNode';
 
-export type CcbMcpHealthItem = {
-  layer: 'config' | 'files' | 'agents' | 'probe';
-  id: string;
-  ok: boolean;
-  detail: string;
-};
+export type {
+  CcbMcpHealthItem,
+  CcbMcpHealthLayerResult,
+  CcbMcpHealthReport,
+  CcbMcpHealthRepairResult,
+} from './ccbMcpHealthShared';
+export {
+  collectCcbMcpHealthFailedItems,
+  collectCcbMcpHealthWarnItems,
+} from './ccbMcpHealthShared';
+import type {
+  CcbMcpHealthItem,
+  CcbMcpHealthLayerResult,
+  CcbMcpHealthReport,
+  CcbMcpHealthRepairResult,
+} from './ccbMcpHealthShared';
 
-export type CcbMcpHealthLayerResult = {
-  ok: boolean;
-  items: CcbMcpHealthItem[];
-};
-
-export type CcbMcpHealthReport = {
-  ok: boolean;
-  checked_at: string;
-  config: CcbMcpHealthLayerResult;
-  probe?: CcbMcpHealthLayerResult;
-  diagnosis?: CcbMcpHealthDiagnosis;
-};
+const EXA_MCP_URL = 'https://mcp.exa.ai/mcp';
+const EXA_HTTP_PROBE_TIMEOUT_MS = 8000;
 
 export type CcbMcpHealthOptions = {
   probe?: boolean;
+  session?: boolean;
 };
+
+function splitLayer1Items(items: CcbMcpHealthItem[]): {
+  config: CcbMcpHealthLayerResult;
+  files?: CcbMcpHealthLayerResult;
+  agents?: CcbMcpHealthLayerResult;
+} {
+  const configItems = items.filter((item) => item.layer === 'config');
+  const fileItems = items.filter((item) => item.layer === 'files');
+  const agentItems = items.filter((item) => item.layer === 'agents');
+  return {
+    config: { ok: layerOk(configItems), items: configItems },
+    files: fileItems.length > 0 ? { ok: layerOk(fileItems), items: fileItems } : undefined,
+    agents: agentItems.length > 0 ? { ok: layerOk(agentItems), items: agentItems } : undefined,
+  };
+}
 
 function readSettingsJson(path: string): CcbSettingsJson | null {
   if (!existsSync(path)) return null;
@@ -182,13 +199,22 @@ function runConfigLayer(configDir: string, installDir: string | null): CcbMcpHea
   return items;
 }
 
-async function runQuotationPythonProbe(
+async function runManifestDeepProbe(
+  serverName: string,
   configDir: string,
   installDir: string | null
 ): Promise<CcbMcpHealthItem | null> {
-  const quotationSpec = CCB_MCP_HEALTH_MANIFEST.mcp_servers.quotation;
-  if (!quotationSpec.probe_tool_call || !installDir) {
+  const serverSpec = CCB_MCP_HEALTH_MANIFEST.mcp_servers[serverName];
+  if (!serverSpec?.probe_tool_call && !serverSpec?.probe_inventory_call) {
     return null;
+  }
+  if (!installDir) {
+    return {
+      layer: 'probe',
+      id: `${serverName}:deep`,
+      ok: false,
+      detail: 'install dir not found for deep probe',
+    };
   }
 
   const installerRoot = resolveCcbInstallerRoot();
@@ -198,14 +224,14 @@ async function runQuotationPythonProbe(
   if (!probeScript || !existsSync(probeScript)) {
     return {
       layer: 'probe',
-      id: 'quotation:python',
+      id: `${serverName}:deep`,
       ok: false,
       detail: 'installer probe script not found (CCB_INSTALLER_ROOT)',
     };
   }
 
   return new Promise((resolveItem) => {
-    const child = spawn('node', [probeScript, '--server=quotation'], {
+    const child = spawn('node', [probeScript, `--server=${serverName}`], {
       env: {
         ...process.env,
         CCB_INSTALL_DIR: installDir,
@@ -225,13 +251,19 @@ async function runQuotationPythonProbe(
     });
 
     child.on('close', (code) => {
-      const tool = quotationSpec.probe_tool_call?.tool ?? 'match_quotation';
-      if (code === 0 && /\[mcp-probe\] PASS quotation/.test(stdout)) {
+      const tool = serverSpec.probe_tool_call?.tool ?? serverSpec.probe_inventory_call?.tool ?? 'tools/call';
+      if (code === 0 && new RegExp(`\\[mcp-probe\\] PASS ${serverName}`).test(stdout)) {
+        const toolLine = stdout
+          .split(/\r?\n/)
+          .find((line) => line.includes(`[mcp-probe] PASS ${serverName}`));
+        const toolNote = toolLine?.includes('tool_call=')
+          ? toolLine.split('tool_call=')[1]?.split(/\s/)[0]
+          : tool;
         resolveItem({
           layer: 'probe',
-          id: 'quotation:python',
+          id: `${serverName}:deep`,
           ok: true,
-          detail: `tools/call ${tool} ok`,
+          detail: `tools/call ${toolNote ?? tool} ok`,
         });
         return;
       }
@@ -239,15 +271,118 @@ async function runQuotationPythonProbe(
         stderr.trim() ||
         stdout
           .split(/\r?\n/)
-          .find((line) => line.includes('[mcp-probe] FAIL quotation'))
-          ?.replace(/^\[mcp-probe\] FAIL quotation:\s*/, '') ||
+          .find((line) => line.includes(`[mcp-probe] FAIL ${serverName}`))
+          ?.replace(new RegExp(`^\\[mcp-probe\\] FAIL ${serverName}:\\s*`), '') ||
         `probe exit ${code ?? 'unknown'}`;
       resolveItem({
         layer: 'probe',
-        id: 'quotation:python',
+        id: `${serverName}:deep`,
         ok: false,
         detail,
       });
+    });
+  });
+}
+
+async function runSessionLayer(configDir: string, installDir: string | null): Promise<CcbMcpHealthItem[]> {
+  const items: CcbMcpHealthItem[] = [];
+  if (!installDir) {
+    items.push({
+      layer: 'session',
+      id: 'session-probe',
+      ok: false,
+      detail: 'CCB-Wanding install dir not found',
+    });
+    return items;
+  }
+
+  const installerRoot = resolveCcbInstallerRoot();
+  const sessionScript = installerRoot
+    ? join(installerRoot, 'test-mcp-session-health.mjs')
+    : null;
+  if (!sessionScript || !existsSync(sessionScript)) {
+    items.push({
+      layer: 'session',
+      id: 'session-probe',
+      ok: false,
+      detail: 'test-mcp-session-health.mjs not found (ccb-installer)',
+    });
+    return items;
+  }
+
+  return new Promise((resolveItems) => {
+    const child = spawn('node', [sessionScript], {
+      env: {
+        ...process.env,
+        CCB_INSTALL_DIR: installDir,
+        CLAUDE_CONFIG_DIR: configDir,
+      },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('close', (code) => {
+      const lines = stdout.split(/\r?\n/);
+      const profileLines = lines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => /^\[session-health\] (PASS|FAIL) /.test(line));
+
+      if (profileLines.length === 0) {
+        resolveItems([
+          {
+            layer: 'session',
+            id: 'session-probe',
+            ok: false,
+            detail: stderr.trim() || stdout.trim() || `session probe exit ${code ?? 'unknown'}`,
+          },
+        ]);
+        return;
+      }
+
+      for (const { line, index } of profileLines) {
+        const match = line.match(/^\[session-health\] (PASS|FAIL) (\S+)/);
+        if (!match) continue;
+        const [, status, profileId] = match;
+        let detail =
+          status === 'PASS'
+            ? 'ACP session profile MCP allowlist ok'
+            : 'session profile MCP mismatch — open a new specialist Guid card (handoff ≤300s)';
+        if (status === 'FAIL') {
+          for (let j = index + 1; j < lines.length; j++) {
+            if (/^\[session-health\]/.test(lines[j])) break;
+            const errorMatch = lines[j].trim().match(/^error:\s*(.+)$/);
+            if (errorMatch) {
+              detail = errorMatch[1];
+              break;
+            }
+          }
+        }
+        items.push({
+          layer: 'session',
+          id: profileId,
+          ok: status === 'PASS',
+          detail,
+        });
+      }
+
+      if (items.length === 0) {
+        items.push({
+          layer: 'session',
+          id: 'session-probe',
+          ok: code === 0,
+          detail: code === 0 ? 'all profiles passed' : stderr.trim() || 'session probe failed',
+        });
+      }
+      resolveItems(items);
     });
   });
 }
@@ -303,16 +438,135 @@ async function runProbeLayer(configDir: string, installDir: string | null): Prom
     });
   }
 
-  const pythonProbe = await runQuotationPythonProbe(configDir, installDir);
-  if (pythonProbe) {
-    items.push(pythonProbe);
+  for (const name of CCB_MCP_HEALTH_DEEP_PROBE_SERVERS) {
+    const deepProbe = await runManifestDeepProbe(name, configDir, installDir);
+    if (deepProbe) {
+      items.push(deepProbe);
+    }
   }
 
   return items;
 }
 
+function itemBlocksOk(item: CcbMcpHealthItem): boolean {
+  return !item.ok && !item.warn;
+}
+
 function layerOk(items: CcbMcpHealthItem[]): boolean {
-  return items.length > 0 && items.every((item) => item.ok);
+  return items.length > 0 && items.every((item) => !itemBlocksOk(item));
+}
+
+/** Streamable HTTP MCP (exa) often returns 405 for HEAD/GET — still proves host reachability. */
+function httpStatusIndicatesReachable(status: number): boolean {
+  if (status >= 200 && status < 400) {
+    return true;
+  }
+  // 4xx = server responded (MCP rejects probe method); not a network failure.
+  if (status >= 400 && status < 500) {
+    return true;
+  }
+  return false;
+}
+
+function formatExaHttpProbeDetail(status: number, method: string): string {
+  if (status >= 200 && status < 400) {
+    return `mcp.exa.ai reachable (HTTP ${status})`;
+  }
+  if (status >= 400 && status < 500) {
+    return `mcp.exa.ai reachable (HTTP ${status} — MCP rejects ${method}; connectivity OK)`;
+  }
+  return `upstream error HTTP ${status} (research-agent may fail)`;
+}
+
+async function probeHttpReachable(
+  url: string,
+  timeoutMs = EXA_HTTP_PROBE_TIMEOUT_MS
+): Promise<{ reachable: boolean; detail: string }> {
+  for (const method of ['HEAD', 'GET'] as const) {
+    try {
+      const resp = await fetch(url, { method, signal: AbortSignal.timeout(timeoutMs) });
+      if (httpStatusIndicatesReachable(resp.status)) {
+        return { reachable: true, detail: formatExaHttpProbeDetail(resp.status, method) };
+      }
+      if (resp.status >= 500) {
+        return { reachable: false, detail: formatExaHttpProbeDetail(resp.status, method) };
+      }
+    } catch {
+      // try GET after HEAD failure
+    }
+  }
+  return {
+    reachable: false,
+    detail:
+      'connection failed: timeout, DNS, or refused (research-agent may fail; core MCP unaffected)',
+  };
+}
+
+async function runOptionalLayer(
+  configDir: string,
+  installDir: string | null
+): Promise<CcbMcpHealthItem[]> {
+  const items: CcbMcpHealthItem[] = [];
+  const settingsPath = join(configDir, 'settings.json');
+  const settings = existsSync(settingsPath) ? readSettingsJson(settingsPath) : null;
+  const mcpServers = settings?.mcpServers ?? {};
+  const exa = mcpServers.exa as { url?: string } | undefined;
+
+  if (exa?.url) {
+    if (exa.url !== EXA_MCP_URL) {
+      items.push({
+        layer: 'optional',
+        id: 'exa:config',
+        ok: false,
+        warn: true,
+        detail: `unexpected URL: ${exa.url} (expected ${EXA_MCP_URL})`,
+      });
+    } else {
+      const probe = await probeHttpReachable(exa.url);
+      items.push({
+        layer: 'optional',
+        id: 'exa:http',
+        ok: probe.reachable,
+        warn: !probe.reachable,
+        detail: probe.detail,
+      });
+    }
+  } else {
+    items.push({
+      layer: 'optional',
+      id: 'exa:http',
+      ok: true,
+      detail: 'not registered (optional)',
+    });
+  }
+
+  const configSkillPath = join(configDir, 'skills', 'ppt-master', 'SKILL.md');
+  const configSkillOk = existsSync(configSkillPath);
+  items.push({
+    layer: 'optional',
+    id: 'ppt-master:config-skill',
+    ok: configSkillOk,
+    warn: !configSkillOk,
+    detail: configSkillOk
+      ? 'skills/ppt-master/SKILL.md exists'
+      : `missing: ${configSkillPath} — run install-ppt-master.ps1`,
+  });
+
+  if (installDir) {
+    const vendorSkillPath = join(installDir, 'vendor', 'ppt-master-skill', 'SKILL.md');
+    const vendorSkillOk = existsSync(vendorSkillPath);
+    items.push({
+      layer: 'optional',
+      id: 'ppt-master:vendor-skill',
+      ok: vendorSkillOk,
+      warn: !vendorSkillOk,
+      detail: vendorSkillOk
+        ? 'vendor/ppt-master-skill/SKILL.md exists'
+        : `missing: ${vendorSkillPath}`,
+    });
+  }
+
+  return items;
 }
 
 export async function runCcbMcpHealthCheck(
@@ -334,11 +588,8 @@ export async function runCcbMcpHealthCheck(
   }
 
   const installDir = resolveCcbWandingInstallDir();
-  const configItems = runConfigLayer(configDir, installDir);
-  const configLayer: CcbMcpHealthLayerResult = {
-    ok: layerOk(configItems),
-    items: configItems,
-  };
+  const layer1Items = runConfigLayer(configDir, installDir);
+  const { config: configLayer, files: filesLayer, agents: agentsLayer } = splitLayer1Items(layer1Items);
 
   let probeLayer: CcbMcpHealthLayerResult | undefined;
   if (options.probe) {
@@ -346,12 +597,33 @@ export async function runCcbMcpHealthCheck(
     probeLayer = { ok: layerOk(probeItems), items: probeItems };
   }
 
-  const ok = configLayer.ok && (probeLayer ? probeLayer.ok : true);
+  let sessionLayer: CcbMcpHealthLayerResult | undefined;
+  if (options.session) {
+    const sessionItems = await runSessionLayer(configDir, installDir);
+    sessionLayer = { ok: layerOk(sessionItems), items: sessionItems };
+  }
+
+  const optionalItems = await runOptionalLayer(configDir, installDir);
+  const optionalLayer: CcbMcpHealthLayerResult = {
+    ok: layerOk(optionalItems),
+    items: optionalItems,
+  };
+
+  const layer1Ok = configLayer.ok && (filesLayer?.ok ?? true) && (agentsLayer?.ok ?? true);
+  const ok =
+    layer1Ok &&
+    (probeLayer ? probeLayer.ok : true) &&
+    (sessionLayer ? sessionLayer.ok : true) &&
+    optionalLayer.ok;
   const report: CcbMcpHealthReport = {
     ok,
     checked_at: new Date().toISOString(),
     config: configLayer,
+    files: filesLayer,
+    agents: agentsLayer,
     probe: probeLayer,
+    session: sessionLayer,
+    optional: optionalLayer,
   };
   if (!ok) {
     report.diagnosis = diagnoseCcbMcpHealth(report);
@@ -403,11 +675,6 @@ function spawnNodeScript(scriptPath: string, args: string[]): Promise<void> {
 export type CcbMcpHealthRepairOptions = {
   /** Whitelisted action ids; defaults to full standard repair sequence */
   actionIds?: CcbMcpHealthRepairActionId[];
-};
-
-export type CcbMcpHealthRepairResult = {
-  ok: boolean;
-  steps: Array<{ id: string; ok: boolean; detail: string }>;
 };
 
 async function runRepairAction(

@@ -98,7 +98,7 @@ import {
   wsEmitter,
   wsMappedEmitter,
 } from './httpBridge';
-import { orgHttpGet, orgHttpPost, orgHttpPut } from './orgHttpBridge';
+import { orgHttpDelete, orgHttpGet, orgHttpPost, orgHttpPut } from './orgHttpBridge';
 import { fromApiSearchResult, type ApiMessageSearchItem } from './searchMapper';
 import type { IAddTeamAgentParams, ICreateTeamParams } from './teamMapper';
 import {
@@ -734,7 +734,7 @@ type RawAuthUser = AuthUser & {
 const normalizeAuthUser = (user: AuthUser): WorkTaskMember => ({
   id: user.id,
   username: user.username,
-  work_task_role: user.work_task_role ?? 'manager',
+  work_task_role: user.work_task_role ?? 'employee',
 });
 
 export const auth = {
@@ -778,25 +778,25 @@ export const priceLibrary = {
 };
 
 export const workTask = {
-  listTasks: httpGet<WorkTask[], { scope?: WorkTaskScope; status?: WorkTaskStatus }>((p = {}) => {
+  listTasks: orgHttpGet<WorkTask[], { scope?: WorkTaskScope; status?: WorkTaskStatus }>((p = {}) => {
     const qs = new URLSearchParams();
     if (p.scope) qs.set('scope', p.scope);
     if (p.status) qs.set('status', p.status);
     const query = qs.toString();
     return `/api/work-tasks${query ? `?${query}` : ''}`;
   }),
-  createTask: httpPost<WorkTask, CreateWorkTaskParams>('/api/work-tasks'),
-  getTask: httpGet<WorkTask, { task_id: string }>((p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`),
-  updateTask: httpPut<WorkTask, { task_id: string; updates: UpdateWorkTaskParams }>(
+  createTask: orgHttpPost<WorkTask, CreateWorkTaskParams>('/api/work-tasks'),
+  getTask: orgHttpGet<WorkTask, { task_id: string }>((p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`),
+  updateTask: orgHttpPut<WorkTask, { task_id: string; updates: UpdateWorkTaskParams }>(
     (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`,
     (p) => p.updates
   ),
-  deleteTask: httpDelete<void, { task_id: string }>((p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`),
-  listMembers: withResponseMap(httpGet<RawAuthUser[], void>('/api/auth/internal/users'), (users) =>
-    users.map(normalizeAuthUser)
+  deleteTask: orgHttpDelete<void, { task_id: string }>((p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}`),
+  listMembers: withResponseMap(orgHttpGet<AuthUser[], void>('/api/users'), (users) =>
+    users.map((user) => normalizeAuthUser(user))
   ),
-  queryTasks: httpGet<WorkTaskQueryResponse, Record<string, never>>('/api/work-tasks/query'),
-  addAttachment: httpPost<WorkTask, AddWorkTaskAttachmentParams>(
+  queryTasks: orgHttpGet<WorkTaskQueryResponse, Record<string, never>>('/api/work-tasks/query'),
+  addAttachment: orgHttpPost<WorkTask, AddWorkTaskAttachmentParams>(
     (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}/attachments`,
     (p) => ({
       file_name: p.file_name,
@@ -805,7 +805,7 @@ export const workTask = {
       size: p.size ?? 0,
     })
   ),
-  removeAttachment: httpDelete<WorkTask, { task_id: string; attachment_id: string }>(
+  removeAttachment: orgHttpDelete<WorkTask, { task_id: string; attachment_id: string }>(
     (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}/attachments/${encodeURIComponent(p.attachment_id)}`
   ),
   onTaskCreated: wsEmitter<WorkTask>('work-task.created'),
@@ -1304,6 +1304,14 @@ export type INotificationOptions = {
 export const notification = {
   show: bridge.buildProvider<void, INotificationOptions>('notification.show'),
   clicked: bridge.buildEmitter<{ conversation_id?: string }>('notification.clicked'),
+};
+
+// ---------------------------------------------------------------------------
+// App badge — stays IPC (Electron taskbar / dock badge)
+// ---------------------------------------------------------------------------
+
+export const appBadge = {
+  setCount: bridge.buildProvider<void, { count: number }>('app-badge.set-count'),
 };
 
 // ---------------------------------------------------------------------------
@@ -1934,8 +1942,10 @@ export type { IAddTeamAgentParams, ICreateTeamParams } from './teamMapper';
 export {
   ccbAgentsService,
   ccbAssistantProfilesService,
+  ccbEmployeeProfileService,
   ccbMcpService,
   ccbModelService,
+  ccbPersonalMemoryService,
   ccbSkillsService,
   ccbUpdate,
 } from './ccbIpcBridge';

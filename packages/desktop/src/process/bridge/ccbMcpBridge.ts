@@ -70,8 +70,8 @@ export function initCcbMcpBridge(): void {
     return testCcbMcpServer(name);
   });
 
-  ipcBridge.ccbMcpService.runHealthCheck.provider(async ({ probe }) => {
-    return runCcbMcpHealthCheck({ probe: Boolean(probe) });
+  ipcBridge.ccbMcpService.runHealthCheck.provider(async ({ probe, session }) => {
+    return runCcbMcpHealthCheck({ probe: Boolean(probe), session: Boolean(session) });
   });
 
   ipcBridge.ccbMcpService.repairHealth.provider(async ({ actionIds }) => {

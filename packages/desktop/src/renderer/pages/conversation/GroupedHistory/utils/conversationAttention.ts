@@ -25,3 +25,20 @@ export function parseActiveConversationIdFromPath(pathname: string): string | nu
   const match = pathname.match(/\/conversation\/([^/]+)/);
   return match?.[1] ?? null;
 }
+
+/** Count distinct conversations with permission or completion attention unread. */
+export function getAttentionUnreadConversationCount(
+  completionUnreadConversationIds: ReadonlySet<string>,
+  permissionUnreadConversationIds: ReadonlySet<string>,
+): number {
+  if (completionUnreadConversationIds.size === 0) {
+    return permissionUnreadConversationIds.size;
+  }
+  if (permissionUnreadConversationIds.size === 0) {
+    return completionUnreadConversationIds.size;
+  }
+
+  const merged = new Set(completionUnreadConversationIds);
+  permissionUnreadConversationIds.forEach((id) => merged.add(id));
+  return merged.size;
+}

@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
 import {
   type ConversationAttentionEvent,
+  getAttentionUnreadConversationCount,
   parseActiveConversationIdFromPath,
   shouldNotifyConversationAttention,
 } from '@/renderer/pages/conversation/GroupedHistory/utils/conversationAttention';
@@ -144,11 +145,13 @@ const emitAttentionEvent = (event: ConversationAttentionEvent) => {
     const lastAt = lastCompletionAttentionAt.get(event.conversation_id) ?? 0;
     const now = Date.now();
     if (now - lastAt < ATTENTION_COMPLETION_DEDUP_MS) {
+      console.log('[Attention] completion dedup skipped', event.conversation_id);
       return;
     }
     lastCompletionAttentionAt.set(event.conversation_id, now);
   }
 
+  console.log('[Attention] emitting', event.kind, event.conversation_id, 'subscribers:', attentionSubscribers.size);
   attentionSubscribers.forEach((listener) => listener(event));
 };
 
@@ -161,7 +164,10 @@ export const subscribeConversationAttentionEvents = (
   };
 };
 
-const subscribeConversationListSync = (listener: () => void) => {
+export const getAttentionUnreadCountSnapshot = (): number =>
+  getAttentionUnreadConversationCount(completionUnreadConversationIdsState, permissionUnreadConversationIdsState);
+
+export const subscribeConversationListSync = (listener: () => void) => {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -388,6 +394,7 @@ export const initializeConversationListSyncStore = () => {
 
     if (isTerminalStreamMessage(message)) {
       const wasGenerating = generatingConversationIdsState.has(conversation_id);
+      console.log('[Attention] stream terminal', message.type, 'conv:', conversation_id, 'wasGenerating:', wasGenerating, 'active:', activeConversationIdState);
       if (wasGenerating && activeConversationIdState !== conversation_id) {
         markCompletionUnread(conversation_id);
       }
@@ -411,6 +418,7 @@ export const initializeConversationListSyncStore = () => {
     }
   });
   ipcBridge.conversation.turnCompleted.on((event) => {
+    console.log('[Attention] turnCompleted state:', event.state, 'session:', event.session_id, 'active:', activeConversationIdState);
     if (isTerminalTurnState(event.state) && activeConversationIdState !== event.session_id) {
       markCompletionUnread(event.session_id);
     }

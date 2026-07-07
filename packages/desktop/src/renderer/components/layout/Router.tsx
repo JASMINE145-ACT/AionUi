@@ -13,12 +13,14 @@ const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSetti
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
 const PetSettings = React.lazy(() => import('@renderer/pages/settings/PetSettings'));
+const EmployeeProfileSettings = React.lazy(() => import('@renderer/pages/settings/EmployeeProfileSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
 const LoginPage = React.lazy(() => import('@renderer/pages/login'));
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
 const OrgKnowledgePage = React.lazy(() => import('@renderer/pages/orgKnowledge/OrgKnowledgePage'));
+const MemoryPage = React.lazy(() => import('@renderer/pages/memory/MemoryPage'));
 const PriceLibraryPage = React.lazy(() => import('@renderer/pages/priceLibrary/PriceLibraryPage'));
 const WorkTasksPage = React.lazy(() => import('@renderer/pages/workTasks/WorkTasksPage'));
 const WorkTaskDetailPage = React.lazy(() => import('@renderer/pages/workTasks/WorkTasksPage/WorkTaskDetailPage'));
@@ -75,6 +77,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
           <Route path='/settings/team-members' element={withRouteFallback(TeamMembersPage)} />
           <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
+          <Route path='/settings/profile' element={withRouteFallback(EmployeeProfileSettings)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
@@ -83,6 +86,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/org-knowledge' element={withRouteFallback(OrgKnowledgePage)} />
+          <Route path='/memory' element={withRouteFallback(MemoryPage)} />
           <Route path='/price-library' element={withRouteFallback(PriceLibraryPage)} />
           <Route path='/tasks' element={withRouteFallback(WorkTasksPage)} />
           <Route path='/tasks/:task_id' element={withRouteFallback(WorkTaskDetailPage)} />

@@ -20,6 +20,7 @@ import type { AgentCheckResult } from '@/renderer/hooks/agent/useAgentReadinessC
 import { applyDefaultConversationName } from '@/renderer/pages/conversation/utils/newConversationName';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
+import { stageAcpInitialMessage } from '@/renderer/pages/conversation/platforms/acp/acpPendingInitialMessage';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
 
 type AgentSetupCardProps = {
@@ -125,8 +126,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         // Store initial message for the new conversation to send automatically
         // 存储初始消息，让新会话自动发送
         if (initialMessage) {
-          const messageData = { input: initialMessage, files: [] as string[] };
-          sessionStorage.setItem(`acp_initial_message_${newConversation.id}`, JSON.stringify(messageData));
+          stageAcpInitialMessage(newConversation.id, { input: initialMessage, files: [] });
         }
 
         // Show success notification and navigate

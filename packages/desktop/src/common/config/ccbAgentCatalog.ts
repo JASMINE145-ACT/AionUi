@@ -23,6 +23,7 @@ export const CCB_WANDING_KEEP_AGENT_IDS = new Set([
   'wande-orchestrator',
   'quotation-agent',
   'accurate-agent',
+  'price-library-agent',
   'word-creator',
   'ppt-creator',
   'excel-creator',
@@ -38,8 +39,12 @@ export const CCB_WANDING_OFFICE_PRESET_IDS = new Set([
   'excel-creator',
 ]);
 
-/** Specialists the default router may delegate to (keep set minus orchestrator) */
+/** Agents kept in fleet but not delegatable from default router (Guid-only specialists). */
+export const CCB_GUID_ONLY_AGENT_IDS = new Set(['price-library-agent']);
+
+/** Specialists the default router may delegate to (keep set minus orchestrator and Guid-only). */
 export function isRouterDelegatableAgentId(id: string): boolean {
+  if (CCB_GUID_ONLY_AGENT_IDS.has(id)) return false;
   return CCB_WANDING_KEEP_AGENT_IDS.has(id) && id !== CCB_DEFAULT_SESSION_AGENT_ID;
 }
 
@@ -166,10 +171,20 @@ export function sortCcbAgents(agents: CcbAgentRecord[]): CcbAgentRecord[] {
   });
 }
 
-export function filterGuidCatalogAgents(agents: CcbAgentRecord[]): CcbAgentRecord[] {
+export type GuidCatalogFilterOptions = {
+  /** When false, agents with requires_price_admin are hidden */
+  isPriceAdmin?: boolean;
+};
+
+export function filterGuidCatalogAgents(
+  agents: CcbAgentRecord[],
+  options?: GuidCatalogFilterOptions,
+): CcbAgentRecord[] {
+  const isPriceAdmin = options?.isPriceAdmin === true;
   return agents.filter((agent) => {
     if (agent.enabled === false) return false;
     if (CCB_GUID_HIDDEN_AGENT_IDS.has(agent.id)) return false;
+    if (agent.requires_price_admin === true && !isPriceAdmin) return false;
     if (agent.source === 'bundled') return true;
     return agent.guid_primary === true;
   });

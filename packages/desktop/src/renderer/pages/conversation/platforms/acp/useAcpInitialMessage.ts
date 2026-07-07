@@ -7,6 +7,14 @@
 import { ipcBridge } from '@/common';
 import { ccbMcpService } from '@/common/adapter/ipcBridge';
 import type { TMessage } from '@/common/chat/chatLib';
+import {
+  assertCcbSessionPreferredModeApplied,
+  ensureCcbSessionPreferredMode,
+} from '@/common/config/ensureCcbSessionPreferredMode';
+import {
+  getCcbSessionPreferredMode,
+  seedCcbSessionPreferredMode,
+} from '@/common/config/ccbSessionPreferredModeStore';
 import type { TConversationRuntimeSummary } from '@/common/config/storage';
 import { parseError, uuid } from '@/common/utils';
 import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
@@ -15,6 +23,11 @@ import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getConversationRuntimeWorkspaceErrorMessage } from '../../utils/conversationCreateError';
+import {
+  claimAcpInitialMessage,
+  clearAcpInitialMessage,
+  releaseAcpInitialMessageClaim,
+} from './acpPendingInitialMessage';
 import { buildSendFailureError } from './buildSendFailureError';
 
 type UseAcpInitialMessageParams = {
@@ -47,7 +60,7 @@ export const useAcpInitialMessage = ({
   markSendAccepted,
   markSendFailed,
   initialModelId: _initialModelId,
-  initialSessionMode: _initialSessionMode,
+  initialSessionMode,
   ccbAuthorityActive,
   checkAndUpdateTitle,
   addOrUpdateMessage,
@@ -55,19 +68,14 @@ export const useAcpInitialMessage = ({
   const { t } = useTranslation();
 
   useEffect(() => {
-    const storageKey = `acp_initial_message_${conversation_id}`;
-    const storedMessage = sessionStorage.getItem(storageKey);
+    const initialMessage = claimAcpInitialMessage(conversation_id);
+    if (!initialMessage) return;
 
-    if (!storedMessage) return;
-
-    // Clear immediately to prevent duplicate sends (e.g., if component remounts while sendMessage is pending)
-    sessionStorage.removeItem(storageKey);
+    const input = initialMessage.input;
+    const files = Array.isArray(initialMessage.files) ? initialMessage.files : [];
 
     const sendInitialMessage = async () => {
       try {
-        const initialMessage = JSON.parse(storedMessage);
-        const input = typeof initialMessage.input === 'string' ? initialMessage.input : '';
-        const files = Array.isArray(initialMessage.files) ? initialMessage.files : [];
         const displayMessage = buildDisplayMessage(input, files, workspacePath || '');
 
         markSendStarted?.();
@@ -76,6 +84,18 @@ export const useAcpInitialMessage = ({
         if (ccbAuthorityActive) {
           await ccbMcpService.ensureStartupReadiness.invoke();
           await warmupConversation(conversation_id);
+          const preferredMode = getCcbSessionPreferredMode(
+            conversation_id,
+            initialSessionMode,
+          )?.trim();
+          if (preferredMode) {
+            seedCcbSessionPreferredMode(conversation_id, preferredMode);
+            const modeResult = await ensureCcbSessionPreferredMode({
+              conversation_id,
+              preferredMode,
+            });
+            assertCcbSessionPreferredModeApplied(modeResult, preferredMode);
+          }
         }
 
         void checkAndUpdateTitle(conversation_id, input);
@@ -85,10 +105,12 @@ export const useAcpInitialMessage = ({
           files,
         });
         markSendAccepted?.(result.turn_id, result.runtime, result.msg_id);
+        clearAcpInitialMessage(conversation_id);
 
         // Initial message sent successfully
         emitter.emit('chat.history.refresh');
       } catch (error) {
+        releaseAcpInitialMessageClaim(conversation_id);
         const errorMessageText =
           getConversationRuntimeWorkspaceErrorMessage(error, t) || parseError(error) || t('common.unknownError');
         markSendFailed?.(errorMessageText);
@@ -127,6 +149,7 @@ export const useAcpInitialMessage = ({
     ccbAuthorityActive,
     checkAndUpdateTitle,
     conversation_id,
+    initialSessionMode,
     markSendAccepted,
     markSendFailed,
     markSendStarted,

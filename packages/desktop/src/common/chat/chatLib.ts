@@ -275,6 +275,17 @@ export type IMessagePermission = IMessage<'permission', IConfirmation>;
 
 export type IMessageAcpToolCall = IMessage<'acp_tool_call', ToolCallUpdate>;
 
+const mergeAcpToolCallTitle = (
+  existingTitle: string | undefined,
+  incomingTitle: string | undefined,
+): string | undefined => {
+  const next = incomingTitle?.trim();
+  if (next) return incomingTitle;
+  const prev = existingTitle?.trim();
+  if (prev) return existingTitle;
+  return incomingTitle ?? existingTitle;
+};
+
 export const mergeAcpToolCallContent = (
   existing: IMessageAcpToolCall['content'],
   incoming: IMessageAcpToolCall['content']
@@ -284,6 +295,7 @@ export const mergeAcpToolCallContent = (
   update: {
     ...existing.update,
     ...incoming.update,
+    title: mergeAcpToolCallTitle(existing.update?.title, incoming.update?.title),
   },
 });
 

@@ -18,7 +18,7 @@ import {
   canTransitionWorkTaskStatus,
   isWorkTaskOverdue,
 } from '@/common/types/workTasks/workTaskTypes';
-import { uploadFileViaHttp } from '@renderer/services/FileService';
+import { uploadFileViaOrgHttp } from '@/common/adapter/orgHttpBridge';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { isElectronDesktop } from '@renderer/utils/platform';
 import { downloadFileFromPath } from '@renderer/utils/file/download';
@@ -78,7 +78,7 @@ const WorkTaskDetailPage: React.FC = () => {
       if (!file || !task_id) return;
       setUploading(true);
       try {
-        const file_path = await uploadFileViaHttp(file, '');
+        const file_path = await uploadFileViaOrgHttp(file, '');
         await ipcBridge.workTask.addAttachment.invoke({
           task_id,
           file_name: file.name,

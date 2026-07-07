@@ -11,6 +11,13 @@ import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useG
 
 const createConversationInvokeMock = vi.fn();
 const swrMutateMock = vi.fn();
+const buildCcbPresetExtraMock = vi.fn();
+const stageCcbProfileMock = vi.fn();
+
+vi.mock('@/common/utils/ccbPresetConversationExtra', () => ({
+  buildCcbPresetConversationExtra: (...args: unknown[]) => buildCcbPresetExtraMock(...args),
+  stageCcbAssistantProfileForSession: (...args: unknown[]) => stageCcbProfileMock(...args),
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -88,6 +95,7 @@ const createDeps = (): GuidSendDeps => ({
     isAvailable: true,
   } as never,
   isGoogleAuth: false,
+  ccbAuthorityActive: false,
   setMentionOpen: vi.fn(),
   setMentionQuery: vi.fn(),
   setMentionSelectorOpen: vi.fn(),
@@ -103,6 +111,18 @@ describe('useGuidSend', () => {
     createConversationInvokeMock.mockResolvedValue({ id: 'conv-1' });
     swrMutateMock.mockReset();
     swrMutateMock.mockResolvedValue(undefined);
+    buildCcbPresetExtraMock.mockReset();
+    buildCcbPresetExtraMock.mockImplementation(async (profileId: string | undefined, active: boolean) =>
+      active && profileId
+        ? {
+            ccb_agent_id: profileId,
+            ccb_assistant_profile_id: profileId,
+            preset_assistant_id: profileId,
+          }
+        : {}
+    );
+    stageCcbProfileMock.mockReset();
+    stageCcbProfileMock.mockResolvedValue(undefined);
   });
 
   it('passes selected mode into assistant conversation overrides when creating a preset ACP conversation', async () => {
@@ -160,5 +180,88 @@ describe('useGuidSend', () => {
     expect(payload.assistant?.conversation_overrides?.mcp_ids).toEqual(['mcp-user', 'builtin-mcp']);
     expect(payload.extra.selected_mcp_server_ids).toEqual(['mcp-user']);
     expect(payload.extra.selected_session_mcp_servers).toEqual([expect.objectContaining({ id: 'builtin-mcp' })]);
+  });
+
+  it('writes wande-orchestrator metadata when CCB authority is active without a preset card', async () => {
+    const deps = createDeps();
+    deps.is_presetAgent = false;
+    deps.selectedAgentInfo = {
+      id: 'claude-1',
+      key: 'claude',
+      name: 'Claude',
+      agent_type: 'claude',
+      backend: 'claude',
+      is_preset: false,
+      isExtension: false,
+    } as never;
+    deps.ccbAuthorityActive = true;
+
+    const { result } = renderHook(() => useGuidSend(deps));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    expect(buildCcbPresetExtraMock).toHaveBeenCalledWith('wande-orchestrator', true);
+    expect(stageCcbProfileMock).toHaveBeenCalledWith('wande-orchestrator');
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.extra.ccb_agent_id).toBe('wande-orchestrator');
+  });
+
+  it('does not write orchestrator metadata for aionrs when CCB active without preset', async () => {
+    const deps = createDeps();
+    deps.is_presetAgent = false;
+    deps.selectedAgent = 'aionrs';
+    deps.selectedAgentInfo = {
+      id: 'aionrs-1',
+      key: 'aionrs',
+      name: 'Aion CLI',
+      agent_type: 'aionrs',
+      backend: 'aionrs',
+      is_preset: false,
+      isExtension: false,
+    } as never;
+    deps.ccbAuthorityActive = true;
+    deps.current_model = { id: 'p1', use_model: 'claude-opus' } as never;
+
+    const { result } = renderHook(() => useGuidSend(deps));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    expect(buildCcbPresetExtraMock).toHaveBeenCalledWith(undefined, true);
+    expect(stageCcbProfileMock).not.toHaveBeenCalled();
+  });
+
+  it('does not write orchestrator metadata for gemini backend when CCB active without preset', async () => {
+    const deps = createDeps();
+    deps.is_presetAgent = false;
+    deps.selectedAgent = 'gemini';
+    deps.selectedAgentInfo = {
+      id: 'gemini-1',
+      key: 'gemini',
+      name: 'Gemini',
+      agent_type: 'gemini',
+      backend: 'gemini',
+      is_preset: false,
+      isExtension: false,
+    } as never;
+    deps.getEffectiveAgentType = vi.fn(() => ({
+      agent_type: 'gemini',
+      isAvailable: true,
+    }));
+    deps.ccbAuthorityActive = true;
+
+    const { result } = renderHook(() => useGuidSend(deps));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    expect(buildCcbPresetExtraMock).toHaveBeenCalledWith(undefined, true);
+    expect(stageCcbProfileMock).not.toHaveBeenCalled();
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.extra?.ccb_agent_id).toBeUndefined();
   });
 });

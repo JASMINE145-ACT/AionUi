@@ -2,6 +2,9 @@
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * @deprecated Use extension channel `ext-wecom-aibot` (Bot ID + Secret long connection)
+ * or `ext-wecom-bot` (HTTP callback). This form targets broken builtin `plugin_id: 'wecom'`.
  */
 
 import type { IChannelPairingRequest, IChannelPluginStatus, IChannelUser } from '@/common/types/channel/channel';

@@ -1,0 +1,35 @@
+{
+  "title": "Memory",
+  "subtitle": "Habits and preferences the agent learns from conversations for future sessions.",
+  "scopeTabs": "Memory scope",
+  "fileList": "Memory files",
+  "filesHeading": "Files",
+  "tab": {
+    "personal": "Personal",
+    "business": "Business"
+  },
+  "save": "Save",
+  "saved": "Saved",
+  "saveFailed": "Failed to save",
+  "loadFailed": "Failed to load memory files",
+  "loadTimeout": "Load timed out. Fully restart AionUI so the main process loads memory IPC.",
+  "unsaved": "Unsaved",
+  "savedState": "Synced",
+  "lineCount": "{{count}} lines",
+  "ccbRequired": "Memory files live under the CCB-Wanding config directory. CCB runtime is not active.",
+  "businessEmpty": "No business memory yet. 1.1.7 only auto-accumulates personal preferences; business rules stay in Knowledge / append_business_rule.",
+  "personalEmpty": "No personal memory files. Run ensure / install seed first.",
+  "selectFile": "Select a file on the left",
+  "selectFileHint": "Choose a Markdown file from the list to view or edit.",
+  "fileDesc": {
+    "profile": "Profile & preferences",
+    "workflow": "Workflow & habits",
+    "default": "Markdown memory file"
+  },
+  "empty": {
+    "personalTitle": "No personal memory yet",
+    "businessTitle": "No business memory yet",
+    "personalHint": "Run CCB ensure / install seed, or let the agent learn from conversation endings.",
+    "businessHint": "Manage business rules via Knowledge Base or append_business_rule."
+  }
+}

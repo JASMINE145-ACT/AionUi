@@ -3,7 +3,7 @@
   "pageTitle": "Wanding Shared Price Library",
   "unconfigured": "ORG_SERVER_URL is not configured.",
   "refresh": "Refresh",
-  "searchPlaceholder": "Search material code or description",
+  "searchPlaceholder": "Search material code, description, or supplier",
   "resultCount": "{{count}} items",
   "columnCount": "{{count}} columns",
   "versionTag": "v{{n}}",
@@ -52,6 +52,7 @@
     "peFactory": "PE factory",
     "unit": "Unit",
     "volume": "Volume",
+    "supplier": "Supplier",
     "rawJson": "Raw JSON"
   }
 }

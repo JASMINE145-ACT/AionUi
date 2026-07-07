@@ -5,6 +5,7 @@
 
 import { clearSessionToken } from '@/common/auth/authSession';
 import { clearOrgSessionToken } from '@/common/auth/orgAuthSession';
+import { ORG_AUTH_CLEAR_CSRF_CHANNEL } from '@/common/adapter/orgHttpBridge';
 
 export const AUTH_SESSION_INVALIDATED_EVENT = 'aionui:auth-session-invalidated';
 
@@ -17,6 +18,7 @@ export function invalidateAuthSession(reason: AuthInvalidationReason = 'http-401
   if (typeof window !== 'undefined') {
     const api = window as Window & { electronAPI?: { invokeIpc?: (channel: string, data?: unknown) => Promise<unknown> } };
     void api.electronAPI?.invokeIpc?.('org-auth-write-token', { token: null });
+    void api.electronAPI?.invokeIpc?.(ORG_AUTH_CLEAR_CSRF_CHANNEL);
   }
 
   if (typeof window === 'undefined') {

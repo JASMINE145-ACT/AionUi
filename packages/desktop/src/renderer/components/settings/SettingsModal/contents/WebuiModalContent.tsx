@@ -22,6 +22,7 @@ import { Button, Form, Input, Message, Switch, Tabs, Tooltip } from '@arco-desig
 import { CheckOne, Communication, Copy, Earth, EditTwo, Refresh } from '@icon-park/react';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ChannelModalContent from './channels/ChannelModalContent';
 import { useSettingsViewMode } from '../settingsViewContext';
 
 /**
@@ -56,7 +57,6 @@ const CHANNEL_LOGOS = [
   { src: ChannelDiscordLogo, alt: 'Discord' },
 ] as const;
 
-const ChannelModalContentLazy = React.lazy(() => import('./channels/ChannelModalContent'));
 const QRCodeSVGLazy = React.lazy(async () => {
   const mod = await import('qrcode.react');
   return { default: mod.QRCodeSVG };
@@ -559,9 +559,7 @@ const WebuiModalContent: React.FC = () => {
         <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
           <div className='space-y-16px'>
             <h2 className='text-20px font-500 text-t-primary m-0'>Channels</h2>
-            <Suspense fallback={<div className='text-13px text-t-secondary'>{t('common.loading')}</div>}>
-              <ChannelModalContentLazy />
-            </Suspense>
+            <ChannelModalContent />
           </div>
         </AionScrollArea>
       </div>
@@ -845,11 +843,7 @@ const WebuiModalContent: React.FC = () => {
         webuiPanel
       ) : (
         <div className='flex-1 min-h-0'>
-          <Suspense
-            fallback={<div className='px-[12px] md:px-[28px] text-13px text-t-secondary'>{t('common.loading')}</div>}
-          >
-            <ChannelModalContentLazy />
-          </Suspense>
+          <ChannelModalContent />
         </div>
       )}
 

@@ -32,6 +32,8 @@ import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { useCcbStartupReadiness } from '@/renderer/hooks/agent/useCcbStartupReadiness';
 import CcbStartupReadinessBanner from '@/renderer/components/ccb/CcbStartupReadinessBanner';
+import CcbPersonalMemoryLearningBanner from '@/renderer/components/ccb/CcbPersonalMemoryLearningBanner';
+import { useCcbPersonalMemoryLearning } from '@/renderer/hooks/useCcbPersonalMemoryLearning';
 import {
   loadGuidCapabilitiesCatalog,
   resolveCcbMcpAllowlistIds,
@@ -66,6 +68,7 @@ const GuidPage: React.FC = () => {
   const localeKey = resolveLocaleKey(i18n.language);
   const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   const startupReadiness = useCcbStartupReadiness();
+  const personalMemoryLearning = useCcbPersonalMemoryLearning(startupReadiness.ccbAuthorityActive);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Open external link
@@ -924,6 +927,8 @@ const GuidPage: React.FC = () => {
               isPreparing={startupReadiness.isPreparing}
             />
           ) : null}
+
+          <CcbPersonalMemoryLearningBanner visible={personalMemoryLearning} />
 
           <GuidInputCard
             input={guidInput.input}

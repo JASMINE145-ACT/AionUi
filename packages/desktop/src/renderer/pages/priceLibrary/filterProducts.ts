@@ -16,7 +16,8 @@ export function filterPriceProducts(products: PriceVersionItem[], query: string)
     const desc = row.description?.toLowerCase() ?? '';
     const descCn = row.description_cn?.toLowerCase() ?? '';
     const descEn = row.description_english?.toLowerCase() ?? '';
-    return code.includes(q) || desc.includes(q) || descCn.includes(q) || descEn.includes(q);
+    const supplier = row.supplier?.toLowerCase() ?? '';
+    return code.includes(q) || desc.includes(q) || descCn.includes(q) || descEn.includes(q) || supplier.includes(q);
   });
 }
 

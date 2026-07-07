@@ -35,6 +35,7 @@ const AcpChat: React.FC<{
   hideSendBox?: boolean;
   emptySlot?: React.ReactNode;
   loadedSkills?: string[];
+  agentBoundSkills?: string[];
   loadedMcpServers?: string[];
   loadedMcpStatuses?: IConversationMcpStatus[];
   assistantId?: string;
@@ -49,6 +50,7 @@ const AcpChat: React.FC<{
   hideSendBox,
   emptySlot,
   loadedSkills,
+  agentBoundSkills,
   loadedMcpServers,
   loadedMcpStatuses,
   assistantId,
@@ -110,6 +112,7 @@ const AcpChat: React.FC<{
         cron_job_id,
         hideSendBox,
         loadedSkills,
+        agentBoundSkills,
         loadedMcpServers,
         loadedMcpStatuses,
         assistantId,

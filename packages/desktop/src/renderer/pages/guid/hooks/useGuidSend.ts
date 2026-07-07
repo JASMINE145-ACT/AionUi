@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { CCB_DEFAULT_SESSION_AGENT_ID } from '@/common/config/ccbAgentCatalog';
 import {
   buildCcbPresetConversationExtra,
   stageCcbAssistantProfileForSession,
@@ -21,6 +22,8 @@ import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
 import type { AcpModelInfo, AvailableAgent, EffectiveAgentInfo } from '../types';
+import { stageAcpInitialMessage } from '@/renderer/pages/conversation/platforms/acp/acpPendingInitialMessage';
+import { isCcbExecutionEngineAgent } from './agentSelectionUtils';
 
 export type GuidSendDeps = {
   // Input state
@@ -200,7 +203,12 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       mcp_ids: assistantOverrideMcpIds,
     };
 
-    const ccbPresetExtra = await buildCcbPresetConversationExtra(preset_assistant_id, ccbAuthorityActive);
+    const ccbProfileId =
+      preset_assistant_id ??
+      (ccbAuthorityActive && agentInfo && isCcbExecutionEngineAgent(agentInfo)
+        ? CCB_DEFAULT_SESSION_AGENT_ID
+        : undefined);
+    const ccbPresetExtra = await buildCcbPresetConversationExtra(ccbProfileId, ccbAuthorityActive);
 
     // Aionrs path (direct selection or preset assistant with aionrs as main agent)
     if (selectedAgent === 'aionrs' || (is_preset && finalEffectiveAgentType === 'aionrs')) {
@@ -238,8 +246,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           return;
         }
 
-        if (ccbAuthorityActive && preset_assistant_id) {
-          await stageCcbAssistantProfileForSession(preset_assistant_id);
+        if (ccbAuthorityActive && ccbProfileId) {
+          await stageCcbAssistantProfileForSession(ccbProfileId);
         }
 
         if (isCustomWorkspace) {
@@ -326,8 +334,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           return;
         }
 
-        if (ccbAuthorityActive && preset_assistant_id) {
-          await stageCcbAssistantProfileForSession(preset_assistant_id);
+        if (ccbAuthorityActive && ccbProfileId) {
+          await stageCcbAssistantProfileForSession(ccbProfileId);
         }
 
         if (isCustomWorkspace) {
@@ -343,11 +351,10 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
         emitter.emit('chat.history.refresh');
 
-        const initialMessage = {
+        stageAcpInitialMessage(conversation.id, {
           input,
           files: files.length > 0 ? files : undefined,
-        };
-        sessionStorage.setItem(`acp_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
+        });
 
         await navigate(`/conversation/${conversation.id}`);
       } catch (error: unknown) {

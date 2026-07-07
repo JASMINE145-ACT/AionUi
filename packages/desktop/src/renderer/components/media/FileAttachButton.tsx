@@ -8,6 +8,7 @@ import type { IConversationMcpStatus, IConversationMcpStatusKind } from '@/commo
 import { ipcBridge } from '@/common';
 import { Button, Message, Trigger } from '@arco-design/web-react';
 import { FolderOpen, Lightning, Paperclip, Plus, Right, Shield } from '@icon-park/react';
+import { partitionAgentBoundSkillNames } from '@/renderer/pages/guid/utils/guidCapabilitiesCatalog';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -88,6 +89,11 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const [mcpOpen, setMcpOpen] = useState(false);
 
   const skillNames = loadedSkills ?? conversationContext?.loadedSkills ?? [];
+  const agentBoundAllowlist = conversationContext?.agentBoundSkills ?? [];
+  const { agentBound: displayAgentBound, platform: displayPlatform } =
+    agentBoundAllowlist.length > 0
+      ? partitionAgentBoundSkillNames(agentBoundAllowlist, skillNames)
+      : { agentBound: [] as string[], platform: skillNames };
   const mcpStatuses = buildLoadedMcpStatuses(
     loadedMcpStatuses ?? conversationContext?.loadedMcpStatuses,
     conversationContext?.loadedMcpServers
@@ -99,7 +105,8 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
 
   const handleSkillClick = useCallback((name: string) => {
     setOpen(false);
-    emitter.emit('sendbox.fill', `/${name} `);
+    const slashName = name.toLowerCase() === 'quotation-learn-by-data' ? 'learn-by-data' : name;
+    emitter.emit('sendbox.fill', `/${slashName} `);
   }, []);
 
   const handleOpenMcpSettings = useCallback(() => {
@@ -154,17 +161,39 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
     zIndex: 1050,
   };
 
+  const renderSkillRow = (name: string) => (
+    <MenuItem
+      key={name}
+      icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
+      label={name}
+      onClick={() => handleSkillClick(name)}
+      className='mx-6px'
+    />
+  );
+
   const skillsPanel = (
     <div style={{ ...cardStyle, minWidth: 180 }} onClick={(e) => e.stopPropagation()}>
-      {skillNames.map((name) => (
-        <MenuItem
-          key={name}
-          icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
-          label={name}
-          onClick={() => handleSkillClick(name)}
-          className='mx-6px'
-        />
-      ))}
+      {displayAgentBound.length > 0 ? (
+        <>
+          <div className='px-12px py-6px text-12px text-t-secondary'>
+            {t('conversation.welcome.ccbAgentBoundSkills', { defaultValue: 'Agent 专属技能' })}
+          </div>
+          {displayAgentBound.map(renderSkillRow)}
+          {displayPlatform.length > 0 ? (
+            <div style={{ margin: '4px 12px', height: 1, backgroundColor: 'var(--color-border-1, #e5e6eb)' }} />
+          ) : null}
+        </>
+      ) : null}
+      {displayPlatform.length > 0 ? (
+        <>
+          {displayAgentBound.length > 0 ? (
+            <div className='px-12px py-6px text-12px text-t-secondary'>
+              {t('conversation.welcome.ccbPlatformSkills', { defaultValue: '平台技能' })}
+            </div>
+          ) : null}
+          {displayPlatform.map(renderSkillRow)}
+        </>
+      ) : null}
     </div>
   );
 

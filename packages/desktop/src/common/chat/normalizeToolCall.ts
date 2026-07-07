@@ -101,6 +101,73 @@ function normalizeAcpStatus(status: string): NormalizedToolStatus {
   }
 }
 
+const getKindDisplayName = (kind?: string): string => {
+  switch (kind) {
+    case 'edit':
+      return 'File Edit';
+    case 'read':
+      return 'File Read';
+    case 'execute':
+      return 'Shell Command';
+    default:
+      return kind?.trim() || 'Tool';
+  }
+};
+
+const extractClaudeCodeToolName = (meta: unknown): string | undefined => {
+  if (!meta || typeof meta !== 'object') return undefined;
+  const claudeCode = (meta as Record<string, unknown>).claudeCode;
+  if (!claudeCode || typeof claudeCode !== 'object') return undefined;
+  const toolName = (claudeCode as Record<string, unknown>).toolName;
+  return typeof toolName === 'string' && toolName.trim() ? toolName.trim() : undefined;
+};
+
+const extractParentToolUseId = (
+  meta: unknown,
+  rawInput?: Record<string, unknown>,
+): string | undefined => {
+  const fromRawInput =
+    typeof rawInput?.parentToolUseId === 'string'
+      ? rawInput.parentToolUseId
+      : typeof rawInput?.parent_tool_use_id === 'string'
+        ? rawInput.parent_tool_use_id
+        : undefined;
+  if (fromRawInput?.trim()) return fromRawInput.trim();
+
+  if (!meta || typeof meta !== 'object') return undefined;
+  const claudeCode = (meta as Record<string, unknown>).claudeCode;
+  if (!claudeCode || typeof claudeCode !== 'object') return undefined;
+  const parentToolUseId = (claudeCode as Record<string, unknown>).parentToolUseId;
+  return typeof parentToolUseId === 'string' && parentToolUseId.trim() ? parentToolUseId.trim() : undefined;
+};
+
+/** Resolve View Steps label when ACP omits title on tool_call_update (aioncore merge contract). */
+export function resolveAcpToolDisplayName(
+  update: {
+    title?: string;
+    kind?: string;
+    rawInput?: Record<string, unknown>;
+    raw_input?: Record<string, unknown>;
+  },
+  meta?: unknown,
+): string {
+  const titled = update.title?.trim();
+  if (titled) return titled;
+
+  const metaTool = extractClaudeCodeToolName(meta);
+  if (metaTool) return metaTool;
+
+  const rawInput = update.rawInput ?? update.raw_input;
+  const keyParam = buildParamSummary(update.kind ?? '', rawInput);
+  if (keyParam?.trim()) return keyParam.trim();
+
+  if (typeof rawInput?.subagent_type === 'string' && rawInput.subagent_type.trim()) {
+    return `Agent(${rawInput.subagent_type})`;
+  }
+
+  return getKindDisplayName(update.kind);
+};
+
 const buildParamSummary = (kind: string, rawInput?: Record<string, unknown>): string | undefined => {
   if (!rawInput) return undefined;
 
@@ -144,6 +211,7 @@ type AcpToolCallContentCompat = IMessageAcpToolCall['content'] & {
     original_size?: number;
     preview_chars?: number;
   };
+  _meta?: unknown;
   update?: AcpToolCallUpdateCompat;
 };
 
@@ -153,6 +221,7 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
   if (!update) return undefined;
 
   const rawInput = update.rawInput ?? update.raw_input;
+  const displayName = resolveAcpToolDisplayName(update, content?._meta);
   const input = rawInput ? formatValue(rawInput) : undefined;
 
   let output: string | undefined;
@@ -171,16 +240,12 @@ export function normalizeAcpToolCall(message: IMessageAcpToolCall): NormalizedTo
 
   return {
     key: update.tool_call_id,
-    name: update.title,
+    name: displayName,
     status: normalizeAcpStatus(update.status),
     kind: update.kind,
-    parentToolUseId:
-      typeof rawInput?.parent_tool_use_id === 'string'
-        ? rawInput.parent_tool_use_id
-        : typeof rawInput?.parentToolUseId === 'string'
-          ? rawInput.parentToolUseId
-          : undefined,
-    isAgentDelegation: update.title === 'Agent' || rawInput?.subagent_type !== undefined,
+    parentToolUseId: extractParentToolUseId(content?._meta, rawInput),
+    isAgentDelegation:
+      displayName === 'Agent' || update.title === 'Agent' || rawInput?.subagent_type !== undefined,
     subagentLabel:
       typeof rawInput?.subagent_type === 'string'
         ? rawInput.subagent_type

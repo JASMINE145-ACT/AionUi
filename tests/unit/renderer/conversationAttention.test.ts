@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  getAttentionUnreadConversationCount,
   parseActiveConversationIdFromPath,
   shouldNotifyConversationAttention,
 } from '@/renderer/pages/conversation/GroupedHistory/utils/conversationAttention';
@@ -22,6 +23,23 @@ describe('conversationAttention', () => {
 
     it('returns true when no conversation is active (Guid/home)', () => {
       expect(shouldNotifyConversationAttention('conv-a', null)).toBe(true);
+    });
+  });
+
+  describe('getAttentionUnreadConversationCount', () => {
+    it('returns 0 when both sets are empty', () => {
+      expect(getAttentionUnreadConversationCount(new Set(), new Set())).toBe(0);
+    });
+
+    it('counts distinct conversations across permission and completion', () => {
+      expect(
+        getAttentionUnreadConversationCount(new Set(['a', 'b']), new Set(['b', 'c'])),
+      ).toBe(3);
+    });
+
+    it('returns single-set size when the other is empty', () => {
+      expect(getAttentionUnreadConversationCount(new Set(['a']), new Set())).toBe(1);
+      expect(getAttentionUnreadConversationCount(new Set(), new Set(['x', 'y']))).toBe(2);
     });
   });
 

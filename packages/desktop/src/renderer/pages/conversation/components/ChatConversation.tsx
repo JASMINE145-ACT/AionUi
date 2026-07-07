@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ipcBridge } from '@/common';
+import { ccbAgentsService } from '@/common/adapter/ipcBridge';
+import CcbPersonalMemoryLearningBanner from '@/renderer/components/ccb/CcbPersonalMemoryLearningBanner';
+import { useCcbPersonalMemoryLearning } from '@/renderer/hooks/useCcbPersonalMemoryLearning';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
+import { mergeConversationLoadedSkills } from '@/renderer/pages/guid/utils/guidCapabilitiesCatalog';
 import type { IConversationMcpStatus, IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import { uuid } from '@/common/utils';
 import addChatIcon from '@/renderer/assets/icons/add-chat.svg';
@@ -219,6 +223,8 @@ const ChatConversation: React.FC<{
   hideSendBox?: boolean;
 }> = ({ conversation, hideSendBox }) => {
   const { t } = useTranslation();
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
+  const personalMemoryLearning = useCcbPersonalMemoryLearning(ccbAuthorityActive);
   const workspaceEnabled = Boolean(conversation?.extra?.workspace);
   const layout = useLayoutContext();
   const isMobile = Boolean(layout?.isMobile);
@@ -232,6 +238,16 @@ const ChatConversation: React.FC<{
   const acpConversation = isAionrsConversation ? undefined : conversation;
   const { info: presetAssistantInfo, isLoading: isLoadingPreset } = usePresetAssistantInfo(acpConversation);
   const acpAssistantId = acpConversation ? (resolveAssistantConfigId(acpConversation) ?? undefined) : undefined;
+
+  const { data: sessionCcbAgent } = useSWR(
+    acpAssistantId ? `conversation.ccbAgent.${acpAssistantId}` : null,
+    () => ccbAgentsService.getAgent.invoke({ id: acpAssistantId! }),
+  );
+
+  const mergedLoadedSkills = useMemo(() => {
+    const platformSkills = (conversation?.extra as { skills?: string[] } | undefined)?.skills ?? [];
+    return mergeConversationLoadedSkills(platformSkills, sessionCcbAgent?.skills.enabled ?? []);
+  }, [conversation, sessionCcbAgent?.skills.enabled]);
 
   const conversationAgentName = (conversation?.extra as { agent_name?: string } | undefined)?.agent_name;
   const assistantDisplayName = presetAssistantInfo?.name || conversationAgentName;
@@ -253,7 +269,8 @@ const ChatConversation: React.FC<{
             agent_name={assistantDisplayName}
             cron_job_id={(conversation.extra as { cron_job_id?: string })?.cron_job_id}
             hideSendBox={resolvedHideSendBox}
-            loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
+            loadedSkills={mergedLoadedSkills}
+            agentBoundSkills={sessionCcbAgent?.skills.enabled ?? []}
             loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
             loadedMcpStatuses={
               (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
@@ -264,7 +281,7 @@ const ChatConversation: React.FC<{
       default:
         return null;
     }
-  }, [conversation, isAionrsConversation, isLegacyReadOnlyConversation, assistantDisplayName, resolvedHideSendBox]);
+  }, [conversation, isAionrsConversation, isLegacyReadOnlyConversation, assistantDisplayName, resolvedHideSendBox, mergedLoadedSkills]);
 
   const sliderTitle = useMemo(() => {
     return (
@@ -356,6 +373,9 @@ const ChatConversation: React.FC<{
       }
       conversation_id={conversation?.id}
     >
+      <div className='px-16px pt-8px'>
+        <CcbPersonalMemoryLearningBanner visible={personalMemoryLearning} />
+      </div>
       {conversationNode}
     </ChatLayout>
   );

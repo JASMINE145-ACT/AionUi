@@ -155,7 +155,7 @@ const PriceLibraryPage: React.FC = () => {
             loading={isLoading}
             columns={columns}
             data={paged}
-            scroll={{ x: 5200, y: 'calc(100vh - 220px)' }}
+            scroll={{ x: 5400, y: 'calc(100vh - 220px)' }}
             pagination={{
               current: page,
               pageSize,

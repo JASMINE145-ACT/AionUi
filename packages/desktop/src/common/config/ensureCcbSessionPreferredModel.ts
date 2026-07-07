@@ -7,7 +7,10 @@
  * Must compare raw backend model ids — never UI-preserved display ids.
  */
 
-import { acpConversation } from '@/common/adapter/ipcBridge'
+import {
+  acpAdapterGetModel,
+  acpAdapterSetModel,
+} from '@/common/adapter/acpConfigOptionsAdapter'
 import type { AcpModelInfo } from '@/common/types/platform/acpTypes'
 import type { CcbModelInfo } from './ccbModelSettingsShared'
 import {
@@ -42,9 +45,7 @@ export async function ensureCcbSessionPreferredModel(params: {
     return { status: 'not_applicable' }
   }
 
-  const { model_info: sessionInfo } = await acpConversation.getModel.invoke({
-    conversation_id: params.conversation_id,
-  })
+  const { model_info: sessionInfo } = await acpAdapterGetModel(params.conversation_id)
 
   const backendModelId = resolveBackendSessionModelId(sessionInfo)
   const sessionHasVariantOption = Boolean(
@@ -59,10 +60,7 @@ export async function ensureCcbSessionPreferredModel(params: {
   // CCB accepts variant ids via setModel — do not defer when the catalog has the id.
   if (!sessionHasVariantOption) {
     try {
-      const confirmed = await acpConversation.setModel.invoke({
-        conversation_id: params.conversation_id,
-        model_id: preferredModelId,
-      })
+      const confirmed = await acpAdapterSetModel(params.conversation_id, preferredModelId)
       const confirmedId =
         resolveBackendSessionModelId(confirmed.model_info ?? null) ?? preferredModelId
       return {
@@ -80,10 +78,7 @@ export async function ensureCcbSessionPreferredModel(params: {
   }
 
   try {
-    const confirmed = await acpConversation.setModel.invoke({
-      conversation_id: params.conversation_id,
-      model_id: preferredModelId,
-    })
+    const confirmed = await acpAdapterSetModel(params.conversation_id, preferredModelId)
     const confirmedId =
       resolveBackendSessionModelId(confirmed.model_info ?? null) ?? preferredModelId
     return {

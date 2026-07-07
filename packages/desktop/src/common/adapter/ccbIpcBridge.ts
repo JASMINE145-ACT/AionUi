@@ -14,14 +14,28 @@ import type { CcbMcpHealthRepairResult, CcbMcpHealthReport } from '../config/ccb
 import type { CcbStartupReadinessStatus } from '../config/ccbStartupReadinessShared';
 import type { CcbMcpHealthRepairActionId } from '../config/ccbMcpHealthDiagnosis';
 import type { CcbModelInfo } from '../config/ccbModelSettingsShared';
+import type { CcbContinuitySnapshot, KnowledgeContinuityState } from '../config/ccbContinuitySnapshotShared';
 import type { CcbSkillImportResult, CcbSkillInfo, CcbSkillPaths } from '../config/ccbSkillsShared';
 import type { CcbSkillSyncResult } from '../config/ccbSkillsSyncShared';
 import type { IMcpServer } from '../config/storage';
 import type { CcbUpdateApplyResult, CcbUpdateCheckResult } from '../update/updateTypes';
+import type { EmployeeProfile } from '../config/employeeProfileShared';
+import type { CcbPersonalMemoryLearningStatus } from '../config/ccbPersonalMemoryLearning';
+import type { MemoryFileContent, MemoryFileSummary, MemoryScope } from '../config/ccbMemoryFiles';
 
 export const ccbModelService = {
   isAuthorityActive: bridge.buildProvider<boolean, void>('ccb.model.isAuthorityActive'),
   getModelInfo: bridge.buildProvider<CcbModelInfo | null, void>('ccb.model.getModelInfo'),
+  getContinuitySnapshot: bridge.buildProvider<CcbContinuitySnapshot | null, void>(
+    'ccb.model.getContinuitySnapshot'
+  ),
+  syncKnowledgeContinuity: bridge.buildProvider<
+    void,
+    { conversation_id: string; state: KnowledgeContinuityState; session_id?: string }
+  >('ccb.model.syncKnowledgeContinuity'),
+  stageConversationIdentity: bridge.buildProvider<void, { conversation_id: string }>(
+    'ccb.model.stageConversationIdentity',
+  ),
 };
 
 export const ccbMcpService = {
@@ -38,7 +52,9 @@ export const ccbMcpService = {
   testConnection: bridge.buildProvider<{ success: boolean; message?: string }, { name: string }>(
     'ccb.mcp.testConnection'
   ),
-  runHealthCheck: bridge.buildProvider<CcbMcpHealthReport, { probe?: boolean }>('ccb.mcp.runHealthCheck'),
+  runHealthCheck: bridge.buildProvider<CcbMcpHealthReport, { probe?: boolean; session?: boolean }>(
+    'ccb.mcp.runHealthCheck'
+  ),
   repairHealth: bridge.buildProvider<CcbMcpHealthRepairResult, { actionIds?: CcbMcpHealthRepairActionId[] }>(
     'ccb.mcp.repairHealth'
   ),
@@ -87,4 +103,25 @@ export const ccbUpdate = {
     { success: boolean; data?: CcbUpdateApplyResult; msg?: string },
     void
   >('ccb.update.apply'),
+};
+
+export const ccbEmployeeProfileService = {
+  syncProfile: bridge.buildProvider<void, { profile: EmployeeProfile | null }>(
+    'ccb.employeeProfile.syncProfile'
+  ),
+};
+
+export const ccbPersonalMemoryService = {
+  getLearningStatus: bridge.buildProvider<CcbPersonalMemoryLearningStatus, void>(
+    'ccb.personalMemory.getLearningStatus'
+  ),
+  listFiles: bridge.buildProvider<MemoryFileSummary[], { scope: MemoryScope }>(
+    'ccb.personalMemory.listFiles'
+  ),
+  readFile: bridge.buildProvider<MemoryFileContent | null, { relPath: string }>(
+    'ccb.personalMemory.readFile'
+  ),
+  writeFile: bridge.buildProvider<MemoryFileContent, { relPath: string; content: string }>(
+    'ccb.personalMemory.writeFile'
+  ),
 };

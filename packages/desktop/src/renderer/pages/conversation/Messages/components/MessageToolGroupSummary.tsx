@@ -4,6 +4,12 @@ import { IconDown, IconRight } from '@arco-design/web-react/icon';
 import { Checklist, Right } from '@icon-park/react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ipcBridge } from '@/common';
+import {
+  buildDelegationRuns,
+  formatDelegationHeader,
+  getOrphanTopLevelTools,
+  type DelegationRun,
+} from '@/common/chat/delegationRun';
 import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/common/chat/normalizeToolCall';
 import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
 import './MessageToolGroupSummary.css';
@@ -24,12 +30,17 @@ const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
   }
 };
 
-const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
+const ToolItemDetail: React.FC<{ item: NormalizedToolCall; nested?: boolean }> = ({ item, nested = false }) => {
   const [expanded, setExpanded] = useState(false);
   const [fullItem, setFullItem] = useState<NormalizedToolCall | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const displayItem = fullItem ?? item;
+  const stepLabel =
+    displayItem.name?.trim() ||
+    displayItem.description?.trim() ||
+    displayItem.kind?.trim() ||
+    'Tool';
   const hasDetail = displayItem.input || displayItem.output || item.truncated;
 
   const loadFullItem = async () => {
@@ -57,7 +68,7 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
   };
 
   return (
-    <div className='flex flex-col'>
+    <div className={`flex flex-col${nested ? ' tool-group-summary__nested-step' : ''}`}>
       <div className='flex flex-row color-#86909C gap-12px items-center'>
         <Badge status={statusToBadge(item.status)} className={item.status === 'running' ? 'badge-breathing' : ''} />
         <span
@@ -68,8 +79,8 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
           }
           onClick={hasDetail ? toggleExpanded : undefined}
         >
-          <span className='font-medium text-13px'>{displayItem.name}</span>
-          {displayItem.description && displayItem.description !== displayItem.name && (
+          <span className='font-medium text-13px'>{stepLabel}</span>
+          {displayItem.description && displayItem.description !== stepLabel && (
             <span className='m-l-4px opacity-80 text-13px'>{displayItem.description}</span>
           )}
         </span>
@@ -101,6 +112,38 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
   );
 };
 
+const DelegationRunGroup: React.FC<{ run: DelegationRun }> = ({ run }) => {
+  const [expanded, setExpanded] = useState(true);
+  const hasAgentDetail = Boolean(run.agentTool.input || run.agentTool.output || run.agentTool.truncated);
+
+  return (
+    <div className='tool-group-summary__delegation-group'>
+      <div className='tool-group-summary__delegation-header'>
+        <Badge status={statusToBadge(run.agentTool.status)} className={run.status === 'running' ? 'badge-breathing' : ''} />
+        <span
+          className={'tool-group-summary__delegation-title' + (hasAgentDetail ? ' cursor-pointer' : '')}
+          onClick={hasAgentDetail ? () => setExpanded((value) => !value) : undefined}
+        >
+          {formatDelegationHeader(run)}
+        </span>
+        {run.childAgentId && <span className='tool-group-summary__delegation-meta'>agentId: {run.childAgentId}</span>}
+        {(hasAgentDetail || run.children.length > 0) && (
+          <span className='tool-group-summary__arrow cursor-pointer' onClick={() => setExpanded((value) => !value)}>
+            {expanded ? <IconDown style={{ fontSize: 12 }} /> : <IconRight style={{ fontSize: 12 }} />}
+          </span>
+        )}
+      </div>
+      {expanded && (
+        <div className='tool-group-summary__delegation-children'>
+          {run.children.map((child) => (
+            <ToolItemDetail key={child.key} item={child} nested />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messages }) => {
   const hasRunning = hasRunningToolMessages(messages);
   const [showMore, setShowMore] = useState(hasRunning);
@@ -110,6 +153,9 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   }, [hasRunning]);
 
   const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
+  const delegationRuns = useMemo(() => buildDelegationRuns(tools), [tools]);
+  const orphanTools = useMemo(() => getOrphanTopLevelTools(tools), [tools]);
+  const visibleStepCount = delegationRuns.length + orphanTools.length;
 
   return (
     <div className='tool-group-summary'>
@@ -117,14 +163,19 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
         <span className='tool-group-summary__icon'>
           {hasRunning ? <Spin size={12} /> : <Checklist theme='outline' size='14' />}
         </span>
-        <span className='tool-group-summary__label'>View Steps {tools.length > 0 ? `· ${tools.length}` : ''}</span>
+        <span className='tool-group-summary__label'>
+          View Steps {visibleStepCount > 0 ? `· ${visibleStepCount}` : ''}
+        </span>
         <span className={`tool-group-summary__arrow${showMore ? ' tool-group-summary__arrow--open' : ''}`}>
           <Right theme='outline' size='12' />
         </span>
       </div>
       {showMore && (
         <div className='tool-group-summary__body'>
-          {tools.map((item) => (
+          {delegationRuns.map((run) => (
+            <DelegationRunGroup key={run.parentToolUseId} run={run} />
+          ))}
+          {orphanTools.map((item) => (
             <ToolItemDetail key={item.key} item={item} />
           ))}
         </div>

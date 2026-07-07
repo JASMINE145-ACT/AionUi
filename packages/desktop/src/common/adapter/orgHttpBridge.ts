@@ -16,6 +16,12 @@ import {
 /** IPC channel — must match `orgHttpProxy.ts` in main process. */
 export const ORG_HTTP_REQUEST_CHANNEL = 'org-http-request';
 
+/** IPC channel for org multipart file upload (work-task attachments). */
+export const ORG_FS_UPLOAD_CHANNEL = 'org-fs-upload';
+
+/** IPC channel to clear org CSRF state in main process (logout). */
+export const ORG_AUTH_CLEAR_CSRF_CHANNEL = 'org-auth-clear-csrf';
+
 type OrgHttpProxyRequest = {
   method: string;
   path: string;
@@ -246,4 +252,90 @@ export function orgHttpPost<Data, Params = undefined>(
       return orgHttpRequest<Data>('POST', resolvedPath, body);
     }) as ProviderLike<Data, Params>['invoke'],
   };
+}
+
+export function orgHttpDelete<Data, Params = undefined>(
+  path: string | ((params: Params) => string)
+): ProviderLike<Data, Params> {
+  return {
+    provider: () => {},
+    invoke: (async (params?: Params) => {
+      const resolvedPath = typeof path === 'function' ? path(params!) : path;
+      return orgHttpRequest<Data>('DELETE', resolvedPath);
+    }) as ProviderLike<Data, Params>['invoke'],
+  };
+}
+
+type OrgFsUploadPayload = {
+  fileName: string;
+  mimeType: string;
+  base64: string;
+  conversation_id?: string;
+};
+
+/** Upload a file to org aioncore `/api/fs/upload` via main-process proxy. */
+export async function uploadFileViaOrgHttp(file: File, conversation_id?: string): Promise<string> {
+  if (typeof window === 'undefined' || typeof window.electronAPI?.invokeIpc !== 'function') {
+    throw new Error('Org file upload requires Electron main-process proxy');
+  }
+
+  const base64 = await readFileAsBase64(file);
+  const headers: Record<string, string> = {};
+  const orgToken = getOrgBearerToken();
+  if (orgToken) {
+    headers.Authorization = `Bearer ${orgToken}`;
+  }
+
+  const result = (await window.electronAPI.invokeIpc(ORG_FS_UPLOAD_CHANNEL, {
+    fileName: file.name,
+    mimeType: file.type || 'application/octet-stream',
+    base64,
+    conversation_id,
+    headers,
+  })) as OrgHttpProxyResponse;
+
+  if (result.error && result.status === 0) {
+    throw new TypeError(result.error);
+  }
+  if (!result.ok) {
+    throw new BackendHttpError({
+      method: 'POST',
+      path: '/api/fs/upload',
+      status: result.status,
+      body: result.json ?? result.text,
+    });
+  }
+
+  const envelope = result.json as { data?: string } | undefined;
+  if (typeof envelope?.data === 'string') {
+    return envelope.data;
+  }
+  if (typeof result.text === 'string' && result.text.length > 0) {
+    try {
+      const parsed = JSON.parse(result.text) as { data?: string };
+      if (typeof parsed.data === 'string') {
+        return parsed.data;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  throw new Error('Org upload response missing file path');
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Failed to read file'));
+        return;
+      }
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 }

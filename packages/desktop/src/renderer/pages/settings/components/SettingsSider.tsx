@@ -16,6 +16,7 @@ import {
   Robot,
   Speed,
   System,
+  User,
 } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo } from 'react';
@@ -35,6 +36,7 @@ export const BUILTIN_TAB_IDS = [
   'appearance',
   'webui',
   'pet',
+  'profile',
   'system',
   'about',
 ] as const;
@@ -114,6 +116,12 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
         path: 'webui',
       },
       pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat />, path: 'pet' },
+      profile: {
+        id: 'profile',
+        label: t('settings.employeeProfile.nav', { defaultValue: '个人信息' }),
+        icon: <User />,
+        path: 'profile',
+      },
       system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
       about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
       teamMembers: {

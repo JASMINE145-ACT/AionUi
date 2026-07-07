@@ -1,0 +1,48 @@
+{
+  "name": "ext-wecom-aibot",
+  "displayName": "ext-企业微信 AI Bot (长连接)",
+  "version": "0.1.0",
+  "description": "Enterprise WeCom AI Bot channel via @wecom/aibot-node-sdk WebSocket long connection (BotID + Secret)",
+  "author": "AionUI Contributors",
+  "icon": "assets/ext-wecom-aibot.svg",
+  "contributes": {
+    "channelPlugins": [
+      {
+        "type": "ext-wecom-aibot",
+        "name": "企业微信 AI Bot (长连接)",
+        "description": "智能机器人长连接模式：Bot ID + Secret，无需公网回调 URL。可选 Advanced wsUrl 用于私有部署。",
+        "icon": "assets/ext-wecom-aibot.svg",
+        "entryPoint": "channels/ext-wecom-aibot-channel.js",
+        "credentialFields": [
+          {
+            "key": "botId",
+            "label": "Bot ID",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "secret",
+            "label": "Secret",
+            "type": "password",
+            "required": true
+          }
+        ],
+        "configFields": [
+          {
+            "key": "wsUrl",
+            "label": "WebSocket URL (Advanced, optional)",
+            "type": "text",
+            "required": false
+          },
+          {
+            "key": "strictGroupAt",
+            "label": "Strict group @bot filter (optional)",
+            "type": "boolean",
+            "required": false,
+            "default": true
+          }
+        ]
+      }
+    ]
+  }
+}

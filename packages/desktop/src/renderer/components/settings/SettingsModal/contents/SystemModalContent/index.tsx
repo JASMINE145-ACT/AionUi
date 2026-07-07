@@ -49,7 +49,7 @@ const SystemModalContent: React.FC = () => {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [cronNotificationEnabled, setCronNotificationEnabled] = useState(false);
   const [promptTimeout, setPromptTimeout] = useState<number>(300);
-  const [agentIdleTimeout, setAgentIdleTimeout] = useState<number>(5);
+  const [agentIdleTimeout, setAgentIdleTimeout] = useState<number>(60);
   const [saveUploadToWorkspace, setSaveUploadToWorkspace] = useState(false);
   const [autoPreviewOfficeFiles, setAutoPreviewOfficeFiles] = useState(true);
 
@@ -217,7 +217,7 @@ const SystemModalContent: React.FC = () => {
   }, []);
 
   const handleAgentIdleTimeoutBlur = useCallback(() => {
-    const clamped = Math.max(1, Math.min(60, agentIdleTimeout || 5));
+    const clamped = Math.max(1, Math.min(60, agentIdleTimeout || 60));
     setAgentIdleTimeout(clamped);
     configService.set('acp.agentIdleTimeout', clamped).catch(() => {});
   }, [agentIdleTimeout]);

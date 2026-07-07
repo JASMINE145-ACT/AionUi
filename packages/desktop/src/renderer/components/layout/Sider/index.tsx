@@ -16,9 +16,11 @@ import {
   SiderSearchEntry,
   SiderScheduledEntry,
   SiderWorkTasksEntry,
+  SiderMemoryEntry,
   SiderOrgKnowledgeEntry,
   SiderPriceLibraryEntry,
 } from './SiderNav';
+import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import SiderFooter from './SiderFooter';
 import CronJobSiderSection from './CronJobSiderSection';
 import TeamSiderSection from './TeamSiderSection';
@@ -45,6 +47,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { theme, setTheme } = useThemeContext();
   const [isBatchMode, setIsBatchMode] = useState(false);
   const { jobs: cronJobs } = useAllCronJobs();
+  const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   useTeamCreatedRedirect();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
@@ -158,6 +161,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   };
 
+  const handleMemoryClick = () => {
+    cleanupSiderTooltips();
+    blurActiveElement();
+    closePreview();
+    setIsBatchMode(false);
+    Promise.resolve(navigate('/memory')).catch((error) => {
+      console.error('Navigation failed:', error);
+    });
+    if (onSessionClick) {
+      onSessionClick();
+    }
+  };
+
   const handleQuickThemeToggle = () => {
     void setTheme(theme === 'dark' ? 'light' : 'dark');
   };
@@ -262,6 +278,14 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               collapsed={collapsed}
               siderTooltipProps={siderTooltipProps}
               onClick={handleOrgKnowledgeClick}
+            />
+            <SiderMemoryEntry
+              isMobile={isMobile}
+              isActive={pathname === '/memory' || pathname.startsWith('/memory/')}
+              collapsed={collapsed}
+              siderTooltipProps={siderTooltipProps}
+              visible={ccbAuthorityActive}
+              onClick={handleMemoryClick}
             />
             <SiderPriceLibraryEntry
               isMobile={isMobile}

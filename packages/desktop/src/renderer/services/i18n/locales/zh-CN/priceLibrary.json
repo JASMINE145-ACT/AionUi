@@ -3,7 +3,7 @@
   "pageTitle": "万鼎共享价格库",
   "unconfigured": "未配置 ORG_SERVER_URL。请在安装包或 org-server.json 中设置组织服务器地址。",
   "refresh": "刷新",
-  "searchPlaceholder": "搜索物料编码或描述",
+  "searchPlaceholder": "搜索物料编码、描述或供应商",
   "resultCount": "共 {{count}} 条",
   "columnCount": "{{count}} 列",
   "versionTag": "v{{n}}",
@@ -52,6 +52,7 @@
     "peFactory": "PE出厂价",
     "unit": "单位",
     "volume": "体积",
+    "supplier": "供应商",
     "rawJson": "原始JSON"
   }
 }

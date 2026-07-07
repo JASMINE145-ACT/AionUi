@@ -16,12 +16,16 @@
  */
 
 import { Tabs } from '@arco-design/web-react';
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import AppLoader from '@/renderer/components/layout/AppLoader';
 import SkillsHubSettings from './SkillsHubSettings';
-import ToolsModalContent from '@/renderer/components/settings/SettingsModal/contents/ToolsModalContent';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
+
+const ToolsModalContent = React.lazy(
+  () => import('@/renderer/components/settings/SettingsModal/contents/ToolsModalContent')
+);
 
 type CapabilitiesTab = 'skills' | 'tools';
 
@@ -56,17 +60,14 @@ const CapabilitiesSettings: React.FC = () => {
 
   return (
     <SettingsPageWrapper contentClassName='max-w-1200px'>
-      <Tabs
-        activeTab={activeTab}
-        onChange={handleTabChange}
-        type='line'
-        className='flex flex-col flex-1 min-h-0 [&>.arco-tabs-content]:pt-0'
-      >
+      <Tabs activeTab={activeTab} onChange={handleTabChange} type='line' lazyload className='[&>.arco-tabs-content]:pt-0'>
         <Tabs.TabPane key='skills' title={t('settings.capabilitiesTab.skills', { defaultValue: 'Skills' })}>
           <SkillsHubSettings withWrapper={false} />
         </Tabs.TabPane>
         <Tabs.TabPane key='tools' title={t('settings.capabilitiesTab.tools', { defaultValue: 'Tools' })}>
-          <ToolsModalContent />
+          <Suspense fallback={<AppLoader />}>
+            <ToolsModalContent />
+          </Suspense>
         </Tabs.TabPane>
       </Tabs>
     </SettingsPageWrapper>

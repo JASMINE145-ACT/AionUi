@@ -8,7 +8,10 @@
  * legacy rows and races where the UI seed has not yet reached the backend.
  */
 
-import { acpConversation } from '@/common/adapter/ipcBridge';
+import {
+  acpAdapterGetMode,
+  acpAdapterSetMode,
+} from '@/common/adapter/acpConfigOptionsAdapter';
 
 export type EnsureCcbSessionPreferredModeResult =
   | { status: 'not_applicable' }
@@ -26,16 +29,13 @@ export async function ensureCcbSessionPreferredMode(params: {
   }
 
   try {
-    const current = await acpConversation.getMode.invoke({ conversation_id: params.conversation_id });
+    const current = await acpAdapterGetMode(params.conversation_id);
     const backendMode = current?.mode?.trim() ?? '';
     if (backendMode === preferredMode) {
       return { status: 'already_applied', backend_mode: backendMode };
     }
 
-    const confirmed = await acpConversation.setMode.invoke({
-      conversation_id: params.conversation_id,
-      mode: preferredMode,
-    });
+    const confirmed = await acpAdapterSetMode(params.conversation_id, preferredMode);
     const confirmedMode = confirmed.mode?.trim() || preferredMode;
     return {
       status: 'applied',
@@ -47,5 +47,33 @@ export async function ensureCcbSessionPreferredMode(params: {
       status: 'failed',
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+export function assertCcbSessionPreferredModeApplied(
+  result: EnsureCcbSessionPreferredModeResult,
+  preferredMode: string,
+): void {
+  const preferred = preferredMode.trim();
+  if (!preferred) return;
+
+  if (result.status === 'not_applicable') {
+    throw new Error('Permission mode sync did not run.');
+  }
+  if (result.status === 'failed') {
+    throw new Error(result.error || 'Failed to apply permission mode.');
+  }
+  if (result.status === 'already_applied') {
+    if (result.backend_mode !== preferred) {
+      throw new Error(
+        `Permission mode mismatch: backend=${result.backend_mode}, expected=${preferred}`,
+      );
+    }
+    return;
+  }
+  if (result.status === 'applied' && result.confirmed_mode !== preferred) {
+    throw new Error(
+      `Permission mode not confirmed: got ${result.confirmed_mode}, expected ${preferred}`,
+    );
   }
 }
