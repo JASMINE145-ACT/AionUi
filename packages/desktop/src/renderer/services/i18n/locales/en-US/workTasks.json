@@ -1,5 +1,9 @@
 {
   "workTasks": "Tasks",
+  "sider": {
+    "pendingAcceptTooltip": "{{count}} pending acceptance",
+    "pendingAcceptA11y": "Tasks, {{count}} pending acceptance"
+  },
   "roleManager": "Manager",
   "roleEmployee": "Employee",
   "page": {

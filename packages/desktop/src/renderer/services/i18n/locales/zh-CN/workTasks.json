@@ -1,5 +1,9 @@
 {
   "workTasks": "任务",
+  "sider": {
+    "pendingAcceptTooltip": "{{count}} 条待接受任务",
+    "pendingAcceptA11y": "任务，{{count}} 条待接受"
+  },
   "roleManager": "管理员",
   "roleEmployee": "员工",
   "page": {
