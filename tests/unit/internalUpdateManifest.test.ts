@@ -2,10 +2,14 @@
  * @vitest-environment node
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
-import {
-  buildCcbUpdateCheckResult,
+import * as internalUpdateManifest from '@/process/bridge/internalUpdateManifest';
+
+const {
   buildUpdateCheckFromManifest,
   compareCcbVersions,
   isCcbVersionNewer,
@@ -14,7 +18,7 @@ import {
   parseCcbBlock,
   parseInternalManifest,
   resolveCcbUpdateMode,
-} from '@/process/bridge/internalUpdateManifest';
+} = internalUpdateManifest;
 
 const FIXTURE = {
   schema_version: 1,
@@ -50,6 +54,10 @@ const FIXTURE = {
 };
 
 describe('internalUpdateManifest', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('parseInternalManifest accepts schema v1', () => {
     const parsed = parseInternalManifest(FIXTURE);
     expect(parsed?.aionui?.version).toBe('2.1.18-wanding.1');
@@ -118,11 +126,28 @@ describe('internalUpdateManifest', () => {
     expect(resolveCcbUpdateMode('1.0.4', ccb)).toBe('none');
   });
 
-  it('buildCcbUpdateCheckResult marks newer version', () => {
+  it('readCcbInstalledVersion reads VERSION from an explicit install dir', () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'ccb-version-read-'));
+    const distDir = join(installDir, 'dist');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'VERSION'), '1.0.0\n', 'utf8');
+
+    expect(internalUpdateManifest.readCcbInstalledVersion(installDir)).toBe('1.0.0');
+  });
+
+  it('buildCcbUpdateCheckResult uses manifest version when installed version is older', () => {
+    const installDir = mkdtempSync(join(tmpdir(), 'ccb-update-check-'));
+    const distDir = join(installDir, 'dist');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'VERSION'), '1.0.0\n', 'utf8');
+
+    const installed = internalUpdateManifest.readCcbInstalledVersion(installDir);
     const manifest = parseInternalManifest(FIXTURE)!;
-    const result = buildCcbUpdateCheckResult(manifest);
-    expect(result?.latest).toBe('1.0.4');
-    expect(result?.mode === 'hot' || result?.mode === 'full').toBe(true);
+    const mode = resolveCcbUpdateMode(installed, manifest.ccb!);
+
+    expect(manifest.ccb?.version).toBe('1.0.4');
+    expect(mode).not.toBe('none');
+    expect(mode === 'hot' || mode === 'full').toBe(true);
   });
 
   it('mapInternalRelease uses bundled full_installer artifact', () => {

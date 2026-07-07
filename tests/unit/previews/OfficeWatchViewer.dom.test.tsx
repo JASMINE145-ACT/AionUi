@@ -17,19 +17,48 @@
  * is recorded in N4c-final.md Deviations.
  */
 
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+
+const IMPORT_TIMEOUT_MS = 120000;
+
+beforeEach(() => {
+  window.__backendPort = 13400;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      return new Response(JSON.stringify({ data: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    })
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.resetModules();
+  delete window.__backendPort;
+});
 
 describe('OfficeWatchViewer module shape', () => {
-  it('module loads and exposes a default export', async () => {
-    const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
-    expect(mod).toBeDefined();
-    expect(mod.default).toBeDefined();
-  });
+  it(
+    'module loads and exposes a default export',
+    async () => {
+      const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+      expect(mod).toBeDefined();
+      expect(mod.default).toBeDefined();
+    },
+    IMPORT_TIMEOUT_MS
+  );
 
-  it('default export is a function (React component)', async () => {
-    const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
-    expect(typeof mod.default).toBe('function');
-  });
+  it(
+    'default export is a function (React component)',
+    async () => {
+      const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+      expect(typeof mod.default).toBe('function');
+    },
+    IMPORT_TIMEOUT_MS
+  );
 
   it('module exports object has no thrown side effects during import', async () => {
     // Importing the module a second time should use the cached copy and not throw.

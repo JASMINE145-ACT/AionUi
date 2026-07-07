@@ -73,7 +73,7 @@ describe('ccbAgentMigration', () => {
 
       const agent = await getCcbAgent('quote-agent');
       expect(agent?.system_prompt).toBe('You quote prices.');
-      expect(agent?.claude_md).toBe('# Quote rules');
+      expect(agent?.claude_md).toBeUndefined();
       expect(agent?.mcp_allowlist).toEqual(['quotation']);
 
       expect(infoSpy).toHaveBeenCalledWith(

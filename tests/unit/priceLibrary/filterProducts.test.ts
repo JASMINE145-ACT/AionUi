@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { filterPriceProducts, formatPriceCell } from '../../../packages/desktop/src/renderer/pages/priceLibrary/filterProducts';
 import type { PriceVersionItem } from '../../../packages/desktop/src/common/types/priceLibrary/priceLibraryTypes';
 
@@ -32,6 +32,20 @@ describe('filterPriceProducts', () => {
 
   test('matches description', () => {
     expect(filterPriceProducts(rows, 'fitting')).toHaveLength(1);
+  });
+
+  test('matches supplier', () => {
+    const withSupplier: PriceVersionItem[] = [
+      {
+        id: '3',
+        product_id: 'p3',
+        material_code: 'X',
+        description: 'x',
+        unit: 'pc',
+        supplier: 'ACME Corp',
+      },
+    ];
+    expect(filterPriceProducts(withSupplier, 'acme')).toHaveLength(1);
   });
 });
 

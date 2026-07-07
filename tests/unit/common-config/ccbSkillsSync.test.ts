@@ -111,10 +111,13 @@ describe('syncAionUiCorpusSkillsToCcbWanding', () => {
       if (method === 'GET' && path === '/api/skills/builtin-auto') {
         return [{ name: 'cron', location: corpusSkill }];
       }
+      if (method === 'GET' && path === '/api/skills') {
+        return [{ name: 'cron', location: corpusSkill, source: 'builtin' }];
+      }
       return [];
     });
 
-    process.env.LOCALAPDATA = localAppData;
+    process.env.LOCALAPPDATA = localAppData;
 
     const result = await syncAionUiCorpusSkillsToCcbWanding();
     expect(result.skipped_existing).toEqual(['cron']);

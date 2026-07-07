@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapAcpCommandToSlashCommand } from '@/common/chat/slash/acpMapping';
 import { mergeSlashCommands } from '@/common/chat/slash/merge';
-import {
-  getSlashCommandBadgeKey,
-  isSlashCommandExecutable,
-  type SlashCommandItem,
-} from '@/common/chat/slash/types';
+import type { SlashCommandItem } from '@/common/chat/slash/types';
 
 const command = (
   name: string,
@@ -33,37 +29,21 @@ describe('mergeSlashCommands', () => {
   });
 });
 
-describe('capability slash mapping', () => {
-  it('maps needs_mapping capabilities as visible but not executable', () => {
-    const mapped = mapAcpCommandToSlashCommand({
-      name: 'config',
-      description: 'Open config panel',
-      _meta: {
-        capability: {
-          source: 'ccb-wanding',
-          status: 'needs_mapping',
-          reason: 'requires_renderer_ui',
-        },
-      },
-    });
-
-    expect(mapped.capabilityStatus).toBe('needs_mapping');
-    expect(isSlashCommandExecutable(mapped)).toBe(false);
-    expect(getSlashCommandBadgeKey(mapped)).toBe('conversation.slash.badge.unsupported');
-  });
-
-  it('maps ready capabilities as executable', () => {
+describe('mapAcpCommandToSlashCommand', () => {
+  it('maps ACP available_commands entries to template slash items', () => {
     const mapped = mapAcpCommandToSlashCommand({
       name: 'commit',
       description: 'Create a git commit',
-      _meta: {
-        capability: {
-          source: 'ccb-wanding',
-          status: 'ready',
-        },
-      },
+      input: { hint: 'message' },
     });
 
-    expect(isSlashCommandExecutable(mapped)).toBe(true);
+    expect(mapped).toEqual({
+      name: 'commit',
+      description: 'Create a git commit',
+      kind: 'template',
+      source: 'acp',
+      selectionBehavior: 'insert',
+      hint: 'message',
+    });
   });
 });

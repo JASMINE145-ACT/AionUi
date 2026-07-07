@@ -394,6 +394,7 @@ describe('httpBridge', () => {
         method: 'GET',
         headers: {},
         body: undefined,
+        credentials: 'omit',
       });
     });
 
