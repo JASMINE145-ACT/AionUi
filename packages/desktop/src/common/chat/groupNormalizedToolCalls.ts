@@ -24,8 +24,8 @@ const appendChild = (
 /**
  * Build a parent/child tree for View Steps.
  * 1) Prefer explicit `parentToolUseId` from the backend.
- * 2) Fallback: nest orphan steps that immediately follow an Agent() delegation
- *    (covers aioncore stripping `_meta` or missing parent ids in the same batch).
+ * 2) Fallback: nest orphan steps that immediately follow an Agent() delegation.
+ * 3) Backfill: nest leading orphans that arrived before the Agent row (common in dev/live ACP ordering).
  */
 export function groupNormalizedToolCalls(tools: NormalizedToolCall[]): GroupedToolCalls {
   const keys = new Set(tools.map((tool) => tool.key));
@@ -34,13 +34,14 @@ export function groupNormalizedToolCalls(tools: NormalizedToolCall[]): GroupedTo
   const fallbackChildKeys = new Set<string>();
 
   for (const item of tools) {
-    if (item.parentToolUseId && keys.has(item.parentToolUseId)) {
+    if (item.parentToolUseId) {
       childKeys.add(item.key);
       appendChild(childrenByParent, item.parentToolUseId, item);
     }
   }
 
   const topLevel: NormalizedToolCall[] = [];
+  let leadingOrphans: NormalizedToolCall[] = [];
   let activeAgentParent: NormalizedToolCall | null = null;
 
   for (const item of tools) {
@@ -49,6 +50,12 @@ export function groupNormalizedToolCalls(tools: NormalizedToolCall[]): GroupedTo
     }
 
     if (item.isAgentDelegation) {
+      for (const orphan of leadingOrphans) {
+        childKeys.add(orphan.key);
+        fallbackChildKeys.add(orphan.key);
+        appendChild(childrenByParent, item.key, orphan);
+      }
+      leadingOrphans = [];
       topLevel.push(item);
       activeAgentParent = item;
       continue;
@@ -61,7 +68,11 @@ export function groupNormalizedToolCalls(tools: NormalizedToolCall[]): GroupedTo
       continue;
     }
 
-    topLevel.push(item);
+    leadingOrphans.push(item);
+  }
+
+  for (const orphan of leadingOrphans) {
+    topLevel.push(orphan);
   }
 
   if (process.env.NODE_ENV !== 'production' && tools.length > 0) {

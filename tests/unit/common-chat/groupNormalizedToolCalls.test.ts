@@ -71,6 +71,23 @@ describe('groupNormalizedToolCalls', () => {
     expect(childrenByParent.get('agent-2')?.map((item) => item.key)).toEqual(['mcp-2']);
   });
 
+  it('backfills leading orphans that arrive before the Agent delegation row', () => {
+    const tools = [
+      tool({ key: 'read-1', name: 'Read wanding_business_knowledge.md' }),
+      tool({ key: 'mcp-1', name: 'mcp__quotation__match_quotation' }),
+      tool({
+        key: 'agent-1',
+        name: 'Agent(quotation-agent)',
+        isAgentDelegation: true,
+      }),
+    ];
+
+    const { topLevel, childrenByParent } = groupNormalizedToolCalls(tools);
+
+    expect(topLevel.map((item) => item.key)).toEqual(['agent-1']);
+    expect(childrenByParent.get('agent-1')?.map((item) => item.key)).toEqual(['read-1', 'mcp-1']);
+  });
+
   it('prefers explicit parentToolUseId over sequential fallback for the same batch', () => {
     const tools = [
       tool({ key: 'agent-1', name: 'Agent', isAgentDelegation: true, subagentLabel: 'quotation-agent' }),

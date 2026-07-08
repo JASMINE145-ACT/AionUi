@@ -4,15 +4,27 @@ import { IconDown, IconRight } from '@arco-design/web-react/icon';
 import { Checklist, Right } from '@icon-park/react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ipcBridge } from '@/common';
+import type { IMessageAcpToolCall } from '@/common/chat/chatLib';
 import {
   buildDelegationRuns,
   formatDelegationHeader,
   getOrphanTopLevelTools,
   type DelegationRun,
 } from '@/common/chat/delegationRun';
+import { formatOperatorToolLabel } from '@/common/chat/operatorToolLabels';
 import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/common/chat/normalizeToolCall';
 import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
+import SubagentDrawer from '../acp/SubagentDrawer';
 import './MessageToolGroupSummary.css';
+
+function findAgentAcpMessage(messages: ToolMessage[], parentToolUseId: string): IMessageAcpToolCall | undefined {
+  for (const message of messages) {
+    if (message.type !== 'acp_tool_call') continue;
+    const acp = message as IMessageAcpToolCall;
+    if (acp.content?.update?.tool_call_id === parentToolUseId) return acp;
+  }
+  return undefined;
+}
 
 const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
   switch (status) {
@@ -36,11 +48,7 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall; nested?: boolean }> =
   const [loadingFull, setLoadingFull] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const displayItem = fullItem ?? item;
-  const stepLabel =
-    displayItem.name?.trim() ||
-    displayItem.description?.trim() ||
-    displayItem.kind?.trim() ||
-    'Tool';
+  const stepLabel = nested ? formatOperatorToolLabel(displayItem) : displayItem.name?.trim() || displayItem.description?.trim() || displayItem.kind?.trim() || 'Tool';
   const hasDetail = displayItem.input || displayItem.output || item.truncated;
 
   const loadFullItem = async () => {
@@ -80,7 +88,7 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall; nested?: boolean }> =
           onClick={hasDetail ? toggleExpanded : undefined}
         >
           <span className='font-medium text-13px'>{stepLabel}</span>
-          {displayItem.description && displayItem.description !== stepLabel && (
+          {!nested && displayItem.description && displayItem.description !== stepLabel && (
             <span className='m-l-4px opacity-80 text-13px'>{displayItem.description}</span>
           )}
         </span>
@@ -112,7 +120,10 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall; nested?: boolean }> =
   );
 };
 
-const DelegationRunGroup: React.FC<{ run: DelegationRun }> = ({ run }) => {
+const DelegationRunGroup: React.FC<{
+  run: DelegationRun;
+  onOpenDrawer?: () => void;
+}> = ({ run, onOpenDrawer }) => {
   const [expanded, setExpanded] = useState(true);
   const hasAgentDetail = Boolean(run.agentTool.input || run.agentTool.output || run.agentTool.truncated);
 
@@ -127,6 +138,18 @@ const DelegationRunGroup: React.FC<{ run: DelegationRun }> = ({ run }) => {
           {formatDelegationHeader(run)}
         </span>
         {run.childAgentId && <span className='tool-group-summary__delegation-meta'>agentId: {run.childAgentId}</span>}
+        {onOpenDrawer && (
+          <button
+            type='button'
+            className='tool-group-summary__drawer-link'
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenDrawer();
+            }}
+          >
+            查看执行
+          </button>
+        )}
         {(hasAgentDetail || run.children.length > 0) && (
           <span className='tool-group-summary__arrow cursor-pointer' onClick={() => setExpanded((value) => !value)}>
             {expanded ? <IconDown style={{ fontSize: 12 }} /> : <IconRight style={{ fontSize: 12 }} />}
@@ -147,6 +170,7 @@ const DelegationRunGroup: React.FC<{ run: DelegationRun }> = ({ run }) => {
 const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messages }) => {
   const hasRunning = hasRunningToolMessages(messages);
   const [showMore, setShowMore] = useState(hasRunning);
+  const [drawerMessage, setDrawerMessage] = useState<IMessageAcpToolCall | null>(null);
 
   useEffect(() => {
     if (hasRunning) setShowMore(true);
@@ -156,15 +180,35 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   const delegationRuns = useMemo(() => buildDelegationRuns(tools), [tools]);
   const orphanTools = useMemo(() => getOrphanTopLevelTools(tools), [tools]);
   const visibleStepCount = delegationRuns.length + orphanTools.length;
+  const runningRuns = useMemo(() => delegationRuns.filter((run) => run.status === 'running'), [delegationRuns]);
+
+  const openDrawerForRun = (run: DelegationRun) => {
+    const agentMessage = findAgentAcpMessage(messages, run.parentToolUseId);
+    if (agentMessage) setDrawerMessage(agentMessage);
+  };
+
+  const runningRun = runningRuns[0];
+  const headerLabel = useMemo(() => {
+    if (!showMore && runningRun) {
+      return formatDelegationHeader(runningRun);
+    }
+    return visibleStepCount > 0 ? String(visibleStepCount) : '';
+  }, [showMore, runningRun, visibleStepCount]);
 
   return (
     <div className='tool-group-summary'>
-      <div className='tool-group-summary__header' onClick={() => setShowMore(!showMore)}>
+      <div
+        className={
+          'tool-group-summary__header' +
+          (runningRun && !showMore ? ' tool-group-summary__header--running' : '')
+        }
+        onClick={() => setShowMore(!showMore)}
+      >
         <span className='tool-group-summary__icon'>
           {hasRunning ? <Spin size={12} /> : <Checklist theme='outline' size='14' />}
         </span>
         <span className='tool-group-summary__label'>
-          View Steps {visibleStepCount > 0 ? `· ${visibleStepCount}` : ''}
+          View Steps{headerLabel ? ` · ${headerLabel}` : ''}
         </span>
         <span className={`tool-group-summary__arrow${showMore ? ' tool-group-summary__arrow--open' : ''}`}>
           <Right theme='outline' size='12' />
@@ -173,12 +217,28 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
       {showMore && (
         <div className='tool-group-summary__body'>
           {delegationRuns.map((run) => (
-            <DelegationRunGroup key={run.parentToolUseId} run={run} />
+            <DelegationRunGroup
+              key={run.parentToolUseId}
+              run={run}
+              onOpenDrawer={
+                findAgentAcpMessage(messages, run.parentToolUseId)
+                  ? () => openDrawerForRun(run)
+                  : undefined
+              }
+            />
           ))}
           {orphanTools.map((item) => (
             <ToolItemDetail key={item.key} item={item} />
           ))}
         </div>
+      )}
+      {drawerMessage && (
+        <SubagentDrawer
+          visible={Boolean(drawerMessage)}
+          onClose={() => setDrawerMessage(null)}
+          message={drawerMessage}
+          turnToolMessages={messages}
+        />
       )}
     </div>
   );

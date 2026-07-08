@@ -47,6 +47,13 @@
 
 .tool-group-summary__label {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(100%, 520px);
+}
+
+.tool-group-summary__header--running .tool-group-summary__label {
+  font-weight: 500;
 }
 
 .tool-group-summary__arrow {
@@ -96,6 +103,20 @@
 .tool-group-summary__delegation-meta {
   font-size: 11px;
   color: var(--color-text-3, #86909c);
+}
+
+.tool-group-summary__drawer-link {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: rgb(var(--primary-6));
+  cursor: pointer;
+}
+
+.tool-group-summary__drawer-link:hover {
+  text-decoration: underline;
 }
 
 .tool-group-summary__delegation-children {

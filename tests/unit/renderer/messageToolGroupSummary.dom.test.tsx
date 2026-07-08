@@ -16,6 +16,10 @@ vi.mock('@/common', () => ({
   },
 }));
 
+vi.mock('@renderer/components/Markdown', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 describe('MessageToolGroupSummary', () => {
   it('loads full tool content when expanding a compact history item', async () => {
     const invoke = vi.mocked(ipcBridge.database.getConversationMessage.invoke);
@@ -74,5 +78,70 @@ describe('MessageToolGroupSummary', () => {
       });
     });
     expect(await screen.findByText('full output')).toBeInTheDocument();
+  });
+
+  it('opens SubagentDrawer with nested timeline for delegation runs', () => {
+    render(
+      <MessageToolGroupSummary
+        messages={[
+          {
+            id: 'agent-msg',
+            conversation_id: 'conversation-1',
+            type: 'acp_tool_call',
+            content: {
+              update: {
+                tool_call_id: 'agent-1',
+                status: 'completed',
+                title: 'Agent',
+                kind: 'agent',
+                rawInput: { subagent_type: 'quotation-agent', prompt: '查直接50价格' },
+                content: [
+                  {
+                    type: 'content',
+                    content: { type: 'text', text: JSON.stringify({ agentId: 'abc123', tool_uses: 2 }) },
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: 'read-msg',
+            conversation_id: 'conversation-1',
+            type: 'acp_tool_call',
+            content: {
+              _meta: { claudeCode: { parentToolUseId: 'agent-1' } },
+              update: {
+                tool_call_id: 'read-1',
+                status: 'completed',
+                title: 'Read wanding_business_knowledge.md',
+                kind: 'read',
+              },
+            },
+          },
+          {
+            id: 'mcp-msg',
+            conversation_id: 'conversation-1',
+            type: 'acp_tool_call',
+            content: {
+              _meta: { claudeCode: { parentToolUseId: 'agent-1' } },
+              update: {
+                tool_call_id: 'mcp-1',
+                status: 'completed',
+                title: 'mcp__quotation__match_quotation',
+                kind: 'execute',
+              },
+            },
+          },
+        ] as unknown as ToolMessage[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('View Steps · 1'));
+    fireEvent.click(screen.getByText('查看执行'));
+
+    expect(screen.getByText('子 Agent 执行')).toBeInTheDocument();
+    expect(screen.getAllByText('Read 业务知识库').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('查价 MCP').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('子会话 agentId: abc123')).toBeInTheDocument();
   });
 });

@@ -23,6 +23,12 @@ export function isAgentDelegationToolCall(rawInput: AgentToolCallRawInput, title
   return false;
 }
 
+export function parseSubagentTypeFromDisplayName(name?: string): string | undefined {
+  if (!name?.trim()) return undefined;
+  const match = name.trim().match(/^Agent\(([^)]+)\)$/i);
+  return match?.[1]?.trim() || undefined;
+}
+
 export function getAgentDelegationLabel(rawInput: AgentToolCallRawInput, title?: string): string {
   if (rawInput && typeof rawInput === 'object') {
     const input = rawInput as Record<string, unknown>;

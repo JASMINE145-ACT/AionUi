@@ -176,6 +176,22 @@ describe('formatDelegationHeader', () => {
 
     expect(formatDelegationHeader(run)).toBe('委派 → 万鼎报价专家 · running · 1/2 tools');
   });
+
+  it('parses subagent type from Agent(quotation-agent) and prefers child count over tool_uses:0', () => {
+    const runs = buildDelegationRuns([
+      tool({
+        key: 'agent-1',
+        name: 'Agent(quotation-agent)',
+        isAgentDelegation: true,
+        output: JSON.stringify({ agentId: 'abc123', tool_uses: 0 }),
+      }),
+      tool({ key: 'read-1', name: 'Read SOP' }),
+      tool({ key: 'mcp-1', name: 'match_quotation' }),
+    ]);
+
+    expect(runs[0]?.displayLabel).toBe('万鼎报价专家');
+    expect(runs[0]?.childToolCount).toBe(2);
+  });
 });
 
 describe('findDelegationRunForParent', () => {

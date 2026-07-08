@@ -7,6 +7,7 @@
 import type { BadgeProps } from '@arco-design/web-react';
 import { Badge } from '@arco-design/web-react';
 import React from 'react';
+import { formatOperatorToolLabel } from '@/common/chat/operatorToolLabels';
 import type { NormalizedToolCall, NormalizedToolStatus } from '@/common/chat/normalizeToolCall';
 
 const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
@@ -25,9 +26,6 @@ const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
   }
 };
 
-const stepLabel = (item: NormalizedToolCall): string =>
-  item.name?.trim() || item.description?.trim() || item.kind?.trim() || 'Tool';
-
 export const DelegationRunChildSteps: React.FC<{ children: NormalizedToolCall[] }> = ({ children }) => {
   if (children.length === 0) return null;
 
@@ -39,7 +37,7 @@ export const DelegationRunChildSteps: React.FC<{ children: NormalizedToolCall[] 
             status={statusToBadge(child.status)}
             className={child.status === 'running' ? 'badge-breathing' : ''}
           />
-          <span className='flex-1 min-w-0 truncate text-13px font-medium'>{stepLabel(child)}</span>
+          <span className='flex-1 min-w-0 truncate text-13px font-medium'>{formatOperatorToolLabel(child)}</span>
         </div>
       ))}
     </div>

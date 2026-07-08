@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { getAgentDelegationLabel } from './agentToolCallUtils';
+import { getAgentDelegationLabel, parseSubagentTypeFromDisplayName } from './agentToolCallUtils';
 import { groupNormalizedToolCalls } from './groupNormalizedToolCalls';
 import type { NormalizedToolCall } from './normalizeToolCall';
 
@@ -102,7 +102,8 @@ export function buildDelegationRuns(
   for (const agent of topLevel) {
     if (!agent.isAgentDelegation) continue;
 
-    const explicitType = agent.subagentLabel?.trim();
+    const explicitType =
+      agent.subagentLabel?.trim() || parseSubagentTypeFromDisplayName(agent.name);
     const helperLabel = explicitType ? '' : getAgentDelegationLabel(undefined, agent.name);
     const subagentType =
       explicitType ||
@@ -116,7 +117,9 @@ export function buildDelegationRuns(
     const isTerminal =
       agent.status === 'completed' || agent.status === 'error' || agent.status === 'canceled';
     const childToolCount =
-      isTerminal && outputMeta.toolUses !== undefined ? outputMeta.toolUses : children.length;
+      isTerminal && outputMeta.toolUses !== undefined
+        ? Math.max(outputMeta.toolUses, children.length)
+        : Math.max(children.length, outputMeta.toolUses ?? 0);
 
     runs.push({
       parentToolUseId: agent.key,
