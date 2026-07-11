@@ -24,6 +24,8 @@ import LarkConfigForm from './LarkConfigForm';
 import TelegramConfigForm from './TelegramConfigForm';
 import WeixinConfigForm from './WeixinConfigForm';
 import WecomAibotExtensionPanel from './WecomAibotExtensionPanel';
+import { buildExtensionEnableConfig } from './extensionEnableConfig';
+import { hydrateExtensionFieldValues } from './extensionFieldHydration';
 
 type ChannelModelConfigKey =
   | 'assistant.telegram.defaultModel'
@@ -221,22 +223,22 @@ const ChannelModalContent: React.FC = () => {
         });
 
         setExtensionFieldValues((prev) => {
-          const next: ExtensionFieldValues = { ...prev };
+          const withDefaults: ExtensionFieldValues = { ...prev };
           for (const plugin of extensionPlugins) {
             const fields = [
               ...(plugin.extensionMeta?.credentialFields || []),
               ...(plugin.extensionMeta?.configFields || []),
             ] as ExtensionFieldSchema[];
-            if (!next[plugin.type]) {
-              next[plugin.type] = {};
+            if (!withDefaults[plugin.type]) {
+              withDefaults[plugin.type] = {};
             }
             for (const field of fields) {
-              if (next[plugin.type][field.key] === undefined && field.default !== undefined) {
-                next[plugin.type][field.key] = field.default;
+              if (withDefaults[plugin.type][field.key] === undefined && field.default !== undefined) {
+                withDefaults[plugin.type][field.key] = field.default;
               }
             }
           }
-          return next;
+          return hydrateExtensionFieldValues(withDefaults, extensionPlugins);
         });
       }
     } catch (error) {
@@ -512,14 +514,11 @@ const ChannelModalContent: React.FC = () => {
             }
           }
 
-          const enableConfig = status.hasToken
-            ? Object.fromEntries(
-                Object.entries(fieldValues).filter(([, value]) => {
-                  if (value === undefined || value === '') return false;
-                  return true;
-                })
-              )
-            : fieldValues;
+          const enableConfig = buildExtensionEnableConfig(
+            fieldValues,
+            Boolean(status.hasToken),
+            status.savedFieldValues
+          );
 
           await channel.enablePlugin.invoke({
             plugin_id: status.id || pluginType,

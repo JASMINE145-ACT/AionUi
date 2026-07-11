@@ -24,6 +24,19 @@ const sdkRuntime = require('../../../examples/ext-wecom-aibot/channels/sdk-runti
     hasSecret: boolean;
     wsUrl: string;
   };
+  readCredentials: (config: Record<string, unknown>) => {
+    botId: string;
+    secret: string;
+    wsUrl: string;
+  };
+  waitForAuthenticated: (
+    options?: {
+      getSnapshot?: () => { status: string; lastError?: string | null };
+      intervalMs?: number;
+      timeoutMs?: number;
+      sleep?: (ms: number) => Promise<void>;
+    }
+  ) => Promise<{ status: string }>;
 };
 
 describe('ext-wecom-aibot identity', () => {
@@ -66,6 +79,26 @@ describe('ext-wecom-aibot state + sdk-runtime helpers', () => {
     expect(redacted.wsUrl).toBe('wss://custom.example');
   });
 
+  it('reads credentials from flattened extension config', () => {
+    const creds = sdkRuntime.readCredentials({
+      credentials: { botId: 'wwBOT123', secret: 'super-secret' },
+      config: { wsUrl: 'wss://custom.example' },
+    });
+    expect(creds.botId).toBe('wwBOT123');
+    expect(creds.secret).toBe('super-secret');
+    expect(creds.wsUrl).toBe('wss://custom.example');
+  });
+
+  it('reads credentials from legacy nested extra config', () => {
+    const creds = sdkRuntime.readCredentials({
+      credentials: { extra: { botId: 'wwBOT456', secret: 'nested-secret' } },
+      config: { extra: { wsUrl: 'wss://extra.example' } },
+    });
+    expect(creds.botId).toBe('wwBOT456');
+    expect(creds.secret).toBe('nested-secret');
+    expect(creds.wsUrl).toBe('wss://extra.example');
+  });
+
   it('enforces single active Bot ID lock', () => {
     expect(state.tryAcquireBotLock('bot-a').ok).toBe(true);
     const second = state.tryAcquireBotLock('bot-b');
@@ -79,5 +112,27 @@ describe('ext-wecom-aibot state + sdk-runtime helpers', () => {
     state.setConnectionStatus('connecting');
     state.setConnectionStatus('authenticated');
     expect(state.getConnectionSnapshot().status).toBe('authenticated');
+  });
+
+  it('waits until the SDK connection is authenticated', async () => {
+    const snapshots = [{ status: 'connecting' }, { status: 'authenticated' }];
+    const result = await sdkRuntime.waitForAuthenticated({
+      getSnapshot: () => snapshots.shift() || { status: 'authenticated' },
+      intervalMs: 1,
+      timeoutMs: 10,
+      sleep: async () => {},
+    });
+    expect(result.status).toBe('authenticated');
+  });
+
+  it('fails fast when the SDK connection enters error state', async () => {
+    await expect(
+      sdkRuntime.waitForAuthenticated({
+        getSnapshot: () => ({ status: 'error', lastError: 'bad secret' }),
+        intervalMs: 1,
+        timeoutMs: 10,
+        sleep: async () => {},
+      })
+    ).rejects.toThrow('bad secret');
   });
 });

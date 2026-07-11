@@ -59,6 +59,36 @@ describe('ext-wecom-aibot inbound', () => {
     ).toBe(false);
   });
 
+  it('strictGroupAt accepts structured bot mentions', () => {
+    expect(
+      inbound.shouldIgnoreGroupMessage(
+        {
+          chattype: 'group',
+          chatid: 'g1',
+          text: { content: 'hi bot' },
+          mentioned_list: ['aibot-1'],
+          aibotid: 'aibot-1',
+        },
+        { strictGroupAt: true }
+      )
+    ).toBe(false);
+  });
+
+  it('strictGroupAt ignores unrelated @ mentions', () => {
+    expect(
+      inbound.shouldIgnoreGroupMessage(
+        {
+          chattype: 'group',
+          chatid: 'g1',
+          text: { content: '@alice hi' },
+          mentioned_list: ['alice'],
+          aibotid: 'aibot-1',
+        },
+        { strictGroupAt: true }
+      )
+    ).toBe(true);
+  });
+
   it('builds unified incoming message with namespaced ids', () => {
     const unified = inbound.toUnifiedIncomingMessage(
       {

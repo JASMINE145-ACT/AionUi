@@ -10,6 +10,7 @@ export interface IChannelPluginStatus {
   activeUsers: number;
   botUsername?: string;
   hasToken?: boolean;
+  savedFieldValues?: Record<string, string | number | boolean>;
   isExtension?: boolean;
   extensionMeta?: {
     credentialFields?: Array<{
