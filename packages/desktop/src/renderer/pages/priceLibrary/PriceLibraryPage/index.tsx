@@ -25,7 +25,11 @@ import {
 } from '@/common/types/priceLibrary/priceLibraryTypes';
 import { useOrgAuth } from '@renderer/hooks/context/OrgAuthContext';
 import { filterPriceProducts, formatPriceCell } from '@renderer/pages/priceLibrary/filterProducts';
-import { usePriceLibraryActive } from '@renderer/pages/priceLibrary/usePriceLibrary';
+import PriceLibraryRowDrawer from '@renderer/pages/priceLibrary/PriceLibraryRowDrawer';
+import {
+  useIsOrgPriceAdmin,
+  usePriceLibraryActive,
+} from '@renderer/pages/priceLibrary/usePriceLibrary';
 
 function formatCellValue(
   value: string | number | boolean | null | undefined,
@@ -47,8 +51,10 @@ const PriceLibraryPage: React.FC = () => {
   const { t } = useTranslation();
   const { configured, orgUser } = useOrgAuth();
   const { data, error, isLoading, mutate } = usePriceLibraryActive();
+  const { data: isPriceAdmin } = useIsOrgPriceAdmin();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [editingItem, setEditingItem] = useState<PriceVersionItem | null>(null);
   const pageSize = 50;
 
   const filtered = useMemo(
@@ -61,19 +67,43 @@ const PriceLibraryPage: React.FC = () => {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page]);
 
-  const columns = useMemo(
-    () =>
-      PRICE_LIBRARY_COLUMNS.map((col) => ({
-        title: t(col.titleKey),
-        dataIndex: col.key,
-        width: col.width,
-        ellipsis: col.key === 'description' || col.key === 'raw_json',
-        fixed: col.key === 'material_code' ? ('left' as const) : undefined,
-        render: (v: string | number | boolean | null | undefined) =>
-          formatCellValue(v, col.isNumeric),
-      })),
-    [t]
-  );
+  const columns = useMemo(() => {
+    const dataColumns = PRICE_LIBRARY_COLUMNS.map((col) => ({
+      title: t(col.titleKey),
+      dataIndex: col.key,
+      width: col.width,
+      ellipsis: col.key === 'description' || col.key === 'raw_json',
+      fixed: col.key === 'material_code' ? ('left' as const) : undefined,
+      render: (v: string | number | boolean | null | undefined) =>
+        formatCellValue(v, col.isNumeric),
+    }));
+
+    if (!isPriceAdmin) {
+      return dataColumns;
+    }
+
+    return [
+      ...dataColumns,
+      {
+        title: t('priceLibrary.edit.actions'),
+        dataIndex: '__actions',
+        width: 88,
+        fixed: 'right' as const,
+        render: (_: unknown, record: PriceVersionItem) => (
+          <Button
+            type='text'
+            size='mini'
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingItem(record);
+            }}
+          >
+            {t('priceLibrary.edit.editRow')}
+          </Button>
+        ),
+      },
+    ];
+  }, [t, isPriceAdmin]);
 
   if (!configured || !isOrgServerConfigured()) {
     return (
@@ -98,6 +128,11 @@ const PriceLibraryPage: React.FC = () => {
           {orgUser && (
             <Tag color='green' size='small'>
               {t('priceLibrary.loggedInAs', { user: orgUser.username })}
+            </Tag>
+          )}
+          {isPriceAdmin && (
+            <Tag color='orangered' size='small'>
+              {t('priceLibrary.edit.adminBadge')}
             </Tag>
           )}
         </Space>
@@ -155,7 +190,7 @@ const PriceLibraryPage: React.FC = () => {
             loading={isLoading}
             columns={columns}
             data={paged}
-            scroll={{ x: 5400, y: 'calc(100vh - 220px)' }}
+            scroll={{ x: isPriceAdmin ? 5500 : 5400, y: 'calc(100vh - 220px)' }}
             pagination={{
               current: page,
               pageSize,
@@ -166,6 +201,19 @@ const PriceLibraryPage: React.FC = () => {
           />
         </>
       )}
+
+      <PriceLibraryRowDrawer
+        item={editingItem}
+        visible={!!editingItem}
+        isPriceAdmin={!!isPriceAdmin}
+        onClose={() => setEditingItem(null)}
+        onSaved={() => {
+          /* draft only — active table unchanged until publish */
+        }}
+        onPublished={() => {
+          void mutate();
+        }}
+      />
     </div>
   );
 };

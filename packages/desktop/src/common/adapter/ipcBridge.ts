@@ -42,7 +42,13 @@ import type {
   RevertOrgKnowledgeDocRequest,
   UpdateOrgKnowledgeDocRequest,
 } from '../types/orgKnowledge/orgKnowledgeTypes';
-import type { PriceActiveResponse } from '../types/priceLibrary/priceLibraryTypes';
+import type {
+  PriceActiveResponse,
+  PriceDraftResponse,
+  PublishPriceDraftParams,
+  PublishPriceDraftResult,
+  UpsertPriceDraftItemParams,
+} from '../types/priceLibrary/priceLibraryTypes';
 import type { AcpModelInfo } from '../types/platform/acpTypes';
 import type {
   CreateProviderRequest,
@@ -775,6 +781,20 @@ export const orgKnowledge = {
 
 export const priceLibrary = {
   getActive: orgHttpGet<PriceActiveResponse, void>('/api/price-library/active'),
+  getDraft: orgHttpGet<PriceDraftResponse, void>('/api/price-library/draft'),
+  upsertItem: orgHttpPost<void, UpsertPriceDraftItemParams>(
+    '/api/price-library/draft/items',
+    (p) => ({
+      change_type: p.change_type,
+      ...(p.product_id ? { product_id: p.product_id } : {}),
+      ...(p.material_code ? { material_code: p.material_code } : {}),
+      ...p.fields,
+    })
+  ),
+  publishDraft: orgHttpPost<PublishPriceDraftResult, PublishPriceDraftParams>(
+    '/api/price-library/draft/publish',
+    (p) => ({ reason: p.reason, revision: p.revision })
+  ),
 };
 
 export const workTask = {

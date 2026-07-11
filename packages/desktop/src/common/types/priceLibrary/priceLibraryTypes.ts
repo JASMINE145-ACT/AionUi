@@ -70,6 +70,39 @@ export interface PriceActiveResponse {
   products: PriceVersionItem[];
 }
 
+/** Shared draft overlay — GET /api/price-library/draft (price_admin). */
+export interface PriceDraftItem {
+  product_id?: string | null;
+  change_type?: string | null;
+  material_code?: string | null;
+  [key: string]: unknown;
+}
+
+export interface PriceDraftResponse {
+  revision: number;
+  items: PriceDraftItem[];
+}
+
+export type PriceDraftChangeType = 'update' | 'create' | 'delete' | 'restore';
+
+export interface UpsertPriceDraftItemParams {
+  change_type: PriceDraftChangeType;
+  product_id?: string;
+  material_code?: string;
+  fields: Record<string, string | number | boolean | null>;
+}
+
+export interface PublishPriceDraftParams {
+  reason: string;
+  revision: number;
+}
+
+export interface PublishPriceDraftResult {
+  version?: PriceVersionSummary | null;
+  version_number?: number;
+  [key: string]: unknown;
+}
+
 /** Display column config for the read-only table (matches xlsx header order). */
 export interface PriceLibraryColumnDef {
   key: keyof PriceProductFields;
