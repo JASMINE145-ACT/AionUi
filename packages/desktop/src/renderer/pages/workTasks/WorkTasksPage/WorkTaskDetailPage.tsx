@@ -5,12 +5,14 @@
  */
 
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Message, Select, Spin, Modal, Descriptions } from '@arco-design/web-react';
 import { Download } from '@icon-park/react';
+import useSWR from 'swr';
 import { ipcBridge } from '@/common';
+import { CCB_DEFAULT_SESSION_AGENT_ID } from '@/common/config/ccbAgentCatalog';
 import type { WorkTaskAttachment, WorkTaskStatus } from '@/common/types/workTasks/workTaskTypes';
 import {
   WORK_TASK_STATUSES,
@@ -29,6 +31,12 @@ import WorkTaskStatusTag from '@renderer/pages/workTasks/components/WorkTaskStat
 import WorkTaskSourceTag from '@renderer/pages/workTasks/components/WorkTaskSourceTag';
 import CreateWorkTaskDialog from '@renderer/pages/workTasks/components/CreateWorkTaskDialog';
 import {
+  listWorkTaskUnderstandAgentOptions,
+  workTaskUnderstandAgentLabel,
+} from '@/common/workTasks/workTaskOpenAgent';
+import { openWorkTaskUnderstandConversation } from '@renderer/pages/workTasks/openWorkTaskUnderstandConversation';
+import { getConversationCreateErrorMessage } from '@renderer/pages/conversation/utils/conversationCreateError';
+import {
   deleteLocalWorkTaskAttachmentBlob,
   hasLocalWorkTaskAttachmentBlob,
   resolveLocalWorkTaskAttachmentPath,
@@ -45,9 +53,18 @@ const WorkTaskDetailPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editVisible, setEditVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [openingAgent, setOpeningAgent] = useState(false);
+  const [selectedUnderstandAgentId, setSelectedUnderstandAgentId] = useState(CCB_DEFAULT_SESSION_AGENT_ID);
   const [localBlobIds, setLocalBlobIds] = useState<Set<string>>(new Set());
 
   const { task, loading, mutate } = useWorkTask(task_id);
+  const { data: ccbAgents } = useSWR('workTasks.understand.agents', () =>
+    ipcBridge.ccbAgentsService.listAgents.invoke()
+  );
+  const understandAgentOptions = useMemo(
+    () => listWorkTaskUnderstandAgentOptions(ccbAgents ?? []),
+    [ccbAgents]
+  );
 
   useEffect(() => {
     if (!task?.attachments.length || !isElectronDesktop()) {
@@ -256,6 +273,50 @@ const WorkTaskDetailPage: React.FC = () => {
     [mutate, t, task_id]
   );
 
+  const handleUnderstandWithAgent = useCallback(async () => {
+    if (!task || openingAgent) return;
+    setOpeningAgent(true);
+    const selected =
+      understandAgentOptions.find((a) => a.id === selectedUnderstandAgentId) ??
+      understandAgentOptions[0];
+    const agentId = selected?.id ?? CCB_DEFAULT_SESSION_AGENT_ID;
+    const agentLabel = selected
+      ? workTaskUnderstandAgentLabel(selected)
+      : t('workTasks.detail.mainAgent', { defaultValue: '主入口' });
+
+    try {
+      const result = await openWorkTaskUnderstandConversation({
+        task,
+        agentId,
+        agentLabel,
+      });
+      if (!result.writebackOk) {
+        Message.warning(
+          t('workTasks.message.understandPathWritebackFailed', {
+            defaultValue: '已打开了解会话，但简要路径未能写入任务说明',
+          })
+        );
+      }
+      await navigate(`/conversation/${result.conversationId}`);
+      void mutate().catch((error) => {
+        console.warn('[WorkTaskDetailPage] refresh after understand handoff failed', error);
+      });
+    } catch (error) {
+      console.error('Open work-task understand conversation failed:', error);
+      Message.error(getConversationCreateErrorMessage(error, t));
+    } finally {
+      setOpeningAgent(false);
+    }
+  }, [
+    mutate,
+    navigate,
+    openingAgent,
+    selectedUnderstandAgentId,
+    t,
+    task,
+    understandAgentOptions,
+  ]);
+
   if (loading) {
     return (
       <div className='flex justify-center py-40px'>
@@ -296,7 +357,32 @@ const WorkTaskDetailPage: React.FC = () => {
               <WorkTaskSourceTag task={task} />
             </div>
           </div>
-          <div className='flex gap-8px shrink-0'>
+          <div className='flex gap-8px shrink-0 flex-wrap items-center justify-end'>
+            <Select
+              value={selectedUnderstandAgentId}
+              onChange={(value) => setSelectedUnderstandAgentId(String(value))}
+              style={{ width: 140 }}
+              triggerProps={{ autoAlignPopupWidth: false }}
+              title={t('workTasks.detail.understandAgentTooltip', {
+                defaultValue: '选择了解任务的 Agent（默认主入口）',
+              })}
+            >
+              {understandAgentOptions.map((agent) => (
+                <Select.Option key={agent.id} value={agent.id}>
+                  {workTaskUnderstandAgentLabel(agent)}
+                </Select.Option>
+              ))}
+            </Select>
+            <Button
+              type='primary'
+              loading={openingAgent}
+              onClick={() => void handleUnderstandWithAgent()}
+              title={t('workTasks.detail.understandTooltip', {
+                defaultValue: '新建对话，让 agent 先了解本任务（不会自动改状态）',
+              })}
+            >
+              {t('workTasks.detail.understand', { defaultValue: '了解任务' })}
+            </Button>
             <Button onClick={() => setEditVisible(true)}>{t('workTasks.form.edit')}</Button>
             <Button status='danger' onClick={handleDelete}>
               {t('workTasks.detail.delete')}

@@ -174,4 +174,12 @@ describe('resolveCcbProfileIdFromConversationExtra', () => {
       })
     ).toBe('accurate-agent');
   });
+
+  it('falls back to custom_agent_id for channel preset sessions', () => {
+    expect(
+      resolveCcbProfileIdFromConversationExtra({
+        custom_agent_id: 'quotation-agent',
+      })
+    ).toBe('quotation-agent');
+  });
 });

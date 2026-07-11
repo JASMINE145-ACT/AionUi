@@ -78,7 +78,11 @@
     "changeStatus": "更改状态",
     "delete": "删除任务",
     "deleteConfirm": "确定删除此任务吗？",
-    "creator": "指派人"
+    "creator": "指派人",
+    "understand": "了解任务",
+    "understandTooltip": "新建对话，让 agent 先了解本任务（不会自动改状态）",
+    "understandAgentTooltip": "选择了解任务的 Agent（默认主入口）",
+    "mainAgent": "主入口"
   },
   "message": {
     "createSuccess": "任务已创建",
@@ -89,6 +93,7 @@
     "openAttachmentFailed": "无法打开附件",
     "downloadAttachmentFailed": "无法下载附件",
     "localAttachmentUnavailable": "此附件仅保存在上传者本机，当前设备无法打开",
-    "localAttachmentDesktopOnly": "附件上传仅支持桌面客户端"
+    "localAttachmentDesktopOnly": "附件上传仅支持桌面客户端",
+    "understandPathWritebackFailed": "已打开了解会话，但简要路径未能写入任务说明"
   }
 }

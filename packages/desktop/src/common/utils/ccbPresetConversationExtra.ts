@@ -20,7 +20,7 @@ export function resolveCcbProfileIdFromConversationExtra(
   extra: Record<string, unknown> | undefined
 ): string | undefined {
   if (!extra) return undefined;
-  for (const key of ['ccb_assistant_profile_id', 'ccb_agent_id', 'preset_assistant_id'] as const) {
+  for (const key of ['ccb_assistant_profile_id', 'ccb_agent_id', 'preset_assistant_id', 'custom_agent_id'] as const) {
     const v = extra[key];
     if (typeof v === 'string' && v.trim()) return stripBuiltinAssistantIdPrefix(v.trim());
   }

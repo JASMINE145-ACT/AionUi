@@ -78,7 +78,11 @@
     "changeStatus": "Change status",
     "delete": "Delete task",
     "deleteConfirm": "Delete this task?",
-    "creator": "Creator"
+    "creator": "Creator",
+    "understand": "Understand task",
+    "understandTooltip": "Start a new chat so the agent can understand this task (does not change status)",
+    "understandAgentTooltip": "Choose an agent (default: main entry)",
+    "mainAgent": "Main entry"
   },
   "message": {
     "createSuccess": "Task created",
@@ -89,6 +93,7 @@
     "openAttachmentFailed": "Failed to open attachment",
     "downloadAttachmentFailed": "Failed to download attachment",
     "localAttachmentUnavailable": "This attachment is stored only on the uploader device",
-    "localAttachmentDesktopOnly": "Attachment upload requires the desktop app"
+    "localAttachmentDesktopOnly": "Attachment upload requires the desktop app",
+    "understandPathWritebackFailed": "Opened understand chat, but failed to write the brief path to the task description"
   }
 }
