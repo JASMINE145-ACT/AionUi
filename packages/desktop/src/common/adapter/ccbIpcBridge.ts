@@ -22,6 +22,13 @@ import type { CcbUpdateApplyResult, CcbUpdateCheckResult } from '../update/updat
 import type { EmployeeProfile } from '../config/employeeProfileShared';
 import type { CcbPersonalMemoryLearningStatus } from '../config/ccbPersonalMemoryLearning';
 import type { MemoryFileContent, MemoryFileSummary, MemoryScope } from '../config/ccbMemoryFiles';
+import type {
+  PrecipitationDecisionInput,
+  PrecipitationDecisionResult,
+  PrecipitationProposal,
+  PrecipitationScheduleInput,
+  PrecipitationSummary,
+} from '../config/ccbPrecipitationTypes';
 
 export const ccbModelService = {
   isAuthorityActive: bridge.buildProvider<boolean, void>('ccb.model.isAuthorityActive'),
@@ -123,5 +130,16 @@ export const ccbPersonalMemoryService = {
   ),
   writeFile: bridge.buildProvider<MemoryFileContent, { relPath: string; content: string }>(
     'ccb.personalMemory.writeFile'
+  ),
+};
+
+export const ccbPrecipitationService = {
+  getSummary: bridge.buildProvider<PrecipitationSummary, void>('ccb.precipitation.getSummary'),
+  listPending: bridge.buildProvider<PrecipitationProposal[], void>('ccb.precipitation.listPending'),
+  schedule: bridge.buildProvider<{ ok: boolean; detail?: string }, PrecipitationScheduleInput>(
+    'ccb.precipitation.schedule'
+  ),
+  decide: bridge.buildProvider<PrecipitationDecisionResult, PrecipitationDecisionInput>(
+    'ccb.precipitation.decide'
   ),
 };

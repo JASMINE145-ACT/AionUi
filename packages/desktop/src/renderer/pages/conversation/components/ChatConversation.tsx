@@ -6,7 +6,10 @@
 
 import { ccbAgentsService } from '@/common/adapter/ipcBridge';
 import CcbPersonalMemoryLearningBanner from '@/renderer/components/ccb/CcbPersonalMemoryLearningBanner';
+import { PrecipitationSessionChip } from '@/renderer/components/precipitation/PrecipitationSessionChip';
 import { useCcbPersonalMemoryLearning } from '@/renderer/hooks/useCcbPersonalMemoryLearning';
+import { usePrecipitationSessionPending } from '@/renderer/hooks/usePrecipitationSessionPending';
+import { useSessionPrecipitationSchedule } from '@/renderer/hooks/useSessionPrecipitationSchedule';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { mergeConversationLoadedSkills } from '@/renderer/pages/guid/utils/guidCapabilitiesCatalog';
 import type { IConversationMcpStatus, IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
@@ -18,7 +21,7 @@ import { usePresetAssistantInfo, resolveAssistantConfigId } from '@/renderer/hoo
 import { iconColors } from '@/renderer/styles/colors';
 import { Button, Dropdown, Menu, Message, Tooltip, Typography } from '@arco-design/web-react';
 import { History } from '@icon-park/react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -225,6 +228,18 @@ const ChatConversation: React.FC<{
   const { t } = useTranslation();
   const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   const personalMemoryLearning = useCcbPersonalMemoryLearning(ccbAuthorityActive);
+  const [chipDismissed, setChipDismissed] = useState(false);
+  const sessionPendingCount = usePrecipitationSessionPending(
+    conversation?.id,
+    ccbAuthorityActive && conversation?.type === 'acp'
+  );
+  useSessionPrecipitationSchedule({
+    conversationId: conversation?.id,
+    enabled: ccbAuthorityActive && conversation?.type === 'acp',
+  });
+  useEffect(() => {
+    setChipDismissed(false);
+  }, [conversation?.id]);
   const workspaceEnabled = Boolean(conversation?.extra?.workspace);
   const layout = useLayoutContext();
   const isMobile = Boolean(layout?.isMobile);
@@ -375,6 +390,13 @@ const ChatConversation: React.FC<{
     >
       <div className='px-16px pt-8px'>
         <CcbPersonalMemoryLearningBanner visible={personalMemoryLearning} />
+        {conversation?.type === 'acp' && !chipDismissed ? (
+          <PrecipitationSessionChip
+            conversationId={conversation.id}
+            pendingCount={sessionPendingCount}
+            onDismiss={() => setChipDismissed(true)}
+          />
+        ) : null}
       </div>
       {conversationNode}
     </ChatLayout>

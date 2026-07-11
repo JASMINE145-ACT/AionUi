@@ -13,9 +13,11 @@ import {
 } from '@process/utils/orgServerConfig';
 import { writeWandingBusinessKnowledgeShadow } from '@process/utils/orgKnowledgeShadowSync';
 import { registerOrgHttpProxyHandlers } from '@process/bridge/orgHttpProxy';
+import { registerWorkTaskAttachmentHandlers } from '@process/bridge/workTaskAttachmentBridge';
 
 ensureOrgServerJsonFromEnv();
 registerOrgHttpProxyHandlers();
+registerWorkTaskAttachmentHandlers();
 
 ipcMain.on('get-org-server-url', (event) => {
   event.returnValue = readOrgServerUrl();

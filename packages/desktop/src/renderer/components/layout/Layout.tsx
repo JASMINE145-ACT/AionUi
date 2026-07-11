@@ -18,6 +18,7 @@ import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHis
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/useNotificationClick';
 import { useConversationAttentionNotifications } from '@renderer/hooks/system/useConversationAttentionNotifications';
+import { usePrecipitationColdStartToast } from '@renderer/hooks/usePrecipitationColdStartToast';
 import { useTaskbarAttentionBadge } from '@renderer/hooks/system/useTaskbarAttentionBadge';
 import { useDirectorySelection } from '@renderer/hooks/file/useDirectorySelection';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
@@ -114,6 +115,7 @@ const Layout: React.FC<{
   useDeepLink();
   useNotificationClick();
   useConversationAttentionNotifications();
+  usePrecipitationColdStartToast();
   useTaskbarAttentionBadge();
   const navigate = useNavigate();
   useConversationShortcuts({ navigate });

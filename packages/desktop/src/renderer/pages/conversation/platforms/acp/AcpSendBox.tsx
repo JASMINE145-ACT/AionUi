@@ -32,6 +32,7 @@ import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
 import { useAcpModelInfo } from '@/renderer/hooks/agent/useAcpModelInfo';
 import { useCcbAuthorityActive, useCcbModelInfo } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { useCcbStartupReadiness } from '@/renderer/hooks/agent/useCcbStartupReadiness';
+import { emitPrecipitationUserSend } from '@/renderer/hooks/useSessionPrecipitationSchedule';
 import { useAgentModesForBackend } from '@/renderer/hooks/agent/useAgentModesForBackend';
 import { savePreferredMode } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
@@ -349,6 +350,7 @@ const AcpSendBox: React.FC<{
       }
 
       runtimeView.markSendStarted();
+      emitPrecipitationUserSend(conversation_id);
       setAiProcessing(true);
       debugSessionLog(
         'AcpSendBox.tsx:executeCommand',

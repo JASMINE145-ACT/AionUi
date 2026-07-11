@@ -6,7 +6,25 @@
   "filesHeading": "文件",
   "tab": {
     "personal": "个人",
-    "business": "业务"
+    "business": "业务",
+    "inbox": "待沉淀"
+  },
+  "inbox": {
+    "empty": "暂无待确认沉淀。对话结束约 1 分钟后会自动提取候选条目。",
+    "approve": "批准",
+    "approveEdited": "编辑后批准",
+    "deny": "拒绝",
+    "evidence": "证据",
+    "editPlaceholder": "可编辑后批准",
+    "clarifyPlaceholder": "澄清备注（批准时一并保存）",
+    "viewSession": "查看来源会话",
+    "actionFailed": "操作失败",
+    "orgLoginRequired": "写入组织知识库需先登录组织账号（侧栏 → 知识库）",
+    "actionDone": "已处理",
+    "sessionChip": "本轮对话已沉淀 · {{count}} 条待确认",
+    "view": "查看",
+    "dismiss": "忽略",
+    "coldStartBody": "有 {{count}} 条对话沉淀待确认"
   },
   "save": "保存",
   "saved": "已保存",

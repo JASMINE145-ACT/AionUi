@@ -17,6 +17,7 @@ import { initCcbAgentsBridge } from './ccbAgentsBridge';
 import { initCcbAssistantProfilesBridge } from './ccbAssistantProfilesBridge';
 import { initCcbEmployeeProfileBridge } from './ccbEmployeeProfileBridge';
 import { initCcbPersonalMemoryBridge } from './ccbPersonalMemoryBridge';
+import { initCcbPrecipitationBridge } from './ccbPrecipitationBridge';
 import { initCcbMcpBridge } from './ccbMcpBridge';
 import { initCcbModelBridge } from './ccbModelBridge';
 import { initCcbSkillsBridge } from './ccbSkillsBridge';
@@ -41,6 +42,7 @@ export function initAllBridges(_deps: BridgeDependencies = {}): void {
   initCcbAssistantProfilesBridge();
   initCcbEmployeeProfileBridge();
   initCcbPersonalMemoryBridge();
+  initCcbPrecipitationBridge();
   initCcbSkillsBridge();
   initCcbUpdateBridge();
 }

@@ -820,9 +820,10 @@ export const workTask = {
     (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}/attachments`,
     (p) => ({
       file_name: p.file_name,
-      file_path: p.file_path,
+      file_path: p.file_path ?? '',
       mime_type: p.mime_type,
       size: p.size ?? 0,
+      storage_mode: p.storage_mode ?? 'local',
     })
   ),
   removeAttachment: orgHttpDelete<WorkTask, { task_id: string; attachment_id: string }>(
@@ -1836,6 +1837,10 @@ import type {
   IChannelSession,
   IChannelUser,
 } from '@/common/types/channel/channel';
+import {
+  assertChannelBridgeSuccess,
+  type ChannelBridgeResult,
+} from '@/common/channel/channelBridgeResponse';
 
 type RawPluginStatus = Record<string, unknown>;
 type RawPairing = Record<string, unknown>;
@@ -1853,7 +1858,9 @@ function toPluginStatus(raw: RawPluginStatus): IChannelPluginStatus {
     last_connected: raw.last_connected as number | undefined,
     activeUsers: (raw.active_users ?? 0) as number,
     botUsername: raw.bot_username as string | undefined,
+    error: (raw.error ?? undefined) as string | undefined,
     hasToken: (raw.has_token ?? false) as boolean,
+    savedFieldValues: raw.saved_field_values as IChannelPluginStatus['savedFieldValues'],
     isExtension: raw.is_extension as boolean | undefined,
     extensionMeta: raw.extension_meta as IChannelPluginStatus['extensionMeta'],
   };
@@ -1899,8 +1906,17 @@ export const channel = {
   getPluginStatus: withResponseMap(httpGet<RawPluginStatus[], void>('/api/channel/plugins'), (raw) =>
     raw.map(toPluginStatus)
   ),
-  enablePlugin: httpPost<void, { plugin_id: string; config: Record<string, unknown> }>('/api/channel/plugins/enable'),
-  disablePlugin: httpPost<void, { plugin_id: string }>('/api/channel/plugins/disable'),
+  enablePlugin: withResponseMap(
+    httpPost<ChannelBridgeResult, { plugin_id: string; config: Record<string, unknown> }>(
+      '/api/channel/plugins/enable'
+    ),
+    (data) => {
+      assertChannelBridgeSuccess(data);
+    }
+  ),
+  disablePlugin: withResponseMap(httpPost<ChannelBridgeResult, { plugin_id: string }>('/api/channel/plugins/disable'), (data) => {
+    assertChannelBridgeSuccess(data);
+  }),
   testPlugin: httpPost<
     { success: boolean; bot_username?: string; error?: string },
     { plugin_id: string; token: string; extra_config?: { app_id?: string; app_secret?: string } }
@@ -1966,6 +1982,7 @@ export {
   ccbMcpService,
   ccbModelService,
   ccbPersonalMemoryService,
+  ccbPrecipitationService,
   ccbSkillsService,
   ccbUpdate,
 } from './ccbIpcBridge';

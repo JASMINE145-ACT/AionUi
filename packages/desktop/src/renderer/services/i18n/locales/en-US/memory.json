@@ -6,7 +6,25 @@
   "filesHeading": "Files",
   "tab": {
     "personal": "Personal",
-    "business": "Business"
+    "business": "Business",
+    "inbox": "Pending"
+  },
+  "inbox": {
+    "empty": "No pending precipitation items. Candidates appear about one minute after a conversation goes idle.",
+    "approve": "Approve",
+    "approveEdited": "Approve edited",
+    "deny": "Deny",
+    "evidence": "Evidence",
+    "editPlaceholder": "Edit before approving",
+    "clarifyPlaceholder": "Clarification note (saved on approve)",
+    "viewSession": "View source session",
+    "actionFailed": "Action failed",
+    "orgLoginRequired": "Sign in to the org account first (sidebar → Knowledge) to write shared business rules.",
+    "actionDone": "Done",
+    "sessionChip": "Session precipitated · {{count}} pending",
+    "view": "View",
+    "dismiss": "Dismiss",
+    "coldStartBody": "{{count}} precipitation item(s) need your review"
   },
   "save": "Save",
   "saved": "Saved",

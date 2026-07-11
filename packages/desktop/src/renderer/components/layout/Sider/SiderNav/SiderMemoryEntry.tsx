@@ -8,6 +8,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@arco-design/web-react';
 import { Notes } from '@icon-park/react';
+import { Badge } from '@arco-design/web-react';
 import classNames from 'classnames';
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 
@@ -17,6 +18,7 @@ interface SiderMemoryEntryProps {
   collapsed: boolean;
   siderTooltipProps: SiderTooltipProps;
   visible: boolean;
+  pendingCount?: number;
   onClick: () => void;
 }
 
@@ -26,6 +28,7 @@ const SiderMemoryEntry: React.FC<SiderMemoryEntryProps> = ({
   collapsed,
   siderTooltipProps,
   visible,
+  pendingCount = 0,
   onClick,
 }) => {
   const { t } = useTranslation();
@@ -67,8 +70,9 @@ const SiderMemoryEntry: React.FC<SiderMemoryEntryProps> = ({
         data-testid='sider-memory-entry'
       >
         <span className='size-22px flex items-center justify-center shrink-0 text-t-primary'>{icon}</span>
-        <span className='collapsed-hidden text-t-primary text-14px font-[500] leading-24px flex-1 min-w-0'>
+        <span className='collapsed-hidden text-t-primary text-14px font-[500] leading-24px flex-1 min-w-0 flex items-center gap-6px'>
           {t('memory.title', { defaultValue: '记忆' })}
+          {pendingCount > 0 ? <Badge count={pendingCount} maxCount={99} /> : null}
         </span>
       </div>
     </Tooltip>

@@ -21,6 +21,7 @@ import {
   SiderPriceLibraryEntry,
 } from './SiderNav';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
+import { usePrecipitationSummary } from '@/renderer/hooks/usePrecipitationSummary';
 import SiderFooter from './SiderFooter';
 import CronJobSiderSection from './CronJobSiderSection';
 import TeamSiderSection from './TeamSiderSection';
@@ -48,6 +49,8 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const { jobs: cronJobs } = useAllCronJobs();
   const { active: ccbAuthorityActive } = useCcbAuthorityActive();
+  const precipitationSummary = usePrecipitationSummary(ccbAuthorityActive);
+  const precipitationPendingCount = precipitationSummary?.pendingCount ?? 0;
   useTeamCreatedRedirect();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
@@ -285,6 +288,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               collapsed={collapsed}
               siderTooltipProps={siderTooltipProps}
               visible={ccbAuthorityActive}
+              pendingCount={precipitationPendingCount}
               onClick={handleMemoryClick}
             />
             <SiderPriceLibraryEntry

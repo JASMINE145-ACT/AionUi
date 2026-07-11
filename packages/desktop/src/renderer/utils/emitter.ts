@@ -40,6 +40,7 @@ interface EventTypes {
   'sendbox.fill': [string]; // prompt text to fill
   'sendbox.reply': [ReplyQuote]; // reply/quote a message
   'sendbox.reply.clear': void; // clear reply quote
+  'precipitation:user-send': [{ conversation_id: string }];
 }
 
 export const emitter = new EventEmitter<EventTypes>();
