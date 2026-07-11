@@ -24,6 +24,7 @@ export const CCB_WANDING_KEEP_AGENT_IDS = new Set([
   'quotation-agent',
   'accurate-agent',
   'price-library-agent',
+  'work-tasks-agent',
   'word-creator',
   'ppt-creator',
   'excel-creator',

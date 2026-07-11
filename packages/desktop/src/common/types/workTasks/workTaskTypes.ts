@@ -35,14 +35,18 @@ export type WorkTaskUserSummary = {
   work_task_role: WorkTaskRole;
 };
 
+export type WorkTaskStorageMode = 'local' | 'remote';
+
 export type WorkTaskAttachment = {
   id: string;
   task_id: string;
   file_name: string;
-  file_path: string;
+  file_path?: string;
   mime_type?: string;
   size: number;
   created_at: number;
+  storage_mode?: WorkTaskStorageMode;
+  uploaded_by_id?: string;
 };
 
 export type WorkTask = {
@@ -83,9 +87,10 @@ export type UpdateWorkTaskParams = {
 export type AddWorkTaskAttachmentParams = {
   task_id: string;
   file_name: string;
-  file_path: string;
+  file_path?: string;
   mime_type?: string;
   size?: number;
+  storage_mode?: WorkTaskStorageMode;
 };
 
 export type WorkTaskQuerySummary = {
@@ -154,4 +159,35 @@ export function isWorkTaskOverdue(task: Pick<WorkTask, 'due_at' | 'status'>): bo
 
 export function isWorkTaskManager(role?: string | null): boolean {
   return role === 'manager';
+}
+
+/** True when task metadata marks agent/MCP as the creation source (AC5). */
+export function isWorkTaskAgentCreated(task: Pick<WorkTask, 'metadata'>): boolean {
+  const source = task.metadata?.source;
+  return source === 'agent' || source === 'work-tasks-agent';
+}
+
+export function getWorkTaskAttachmentStorageMode(
+  attachment: Pick<WorkTaskAttachment, 'storage_mode' | 'file_path'>
+): WorkTaskStorageMode {
+  if (attachment.storage_mode === 'local' || attachment.storage_mode === 'remote') {
+    return attachment.storage_mode;
+  }
+  return attachment.file_path ? 'remote' : 'local';
+}
+
+/** Local blobs are openable on the uploader device; legacy remote rows may use stored paths. */
+export function canOpenWorkTaskAttachment(
+  attachment: Pick<WorkTaskAttachment, 'storage_mode' | 'file_path' | 'uploaded_by_id'>,
+  currentUserId: string | undefined,
+  hasLocalBlob: boolean
+): boolean {
+  const mode = getWorkTaskAttachmentStorageMode(attachment);
+  if (mode === 'remote') {
+    return Boolean(attachment.file_path?.trim());
+  }
+  if (!currentUserId || attachment.uploaded_by_id !== currentUserId) {
+    return false;
+  }
+  return hasLocalBlob;
 }

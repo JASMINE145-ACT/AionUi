@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   WORK_TASK_SCOPES,
   WORK_TASK_STATUSES,
+  canOpenWorkTaskAttachment,
   canTransitionWorkTaskStatus,
+  getWorkTaskAttachmentStorageMode,
   isWorkTaskManager,
+  isWorkTaskAgentCreated,
   isWorkTaskOverdue,
 } from '../../../packages/desktop/src/common/types/workTasks/workTaskTypes';
 
@@ -59,5 +62,46 @@ describe('isWorkTaskManager', () => {
   it('detects manager role', () => {
     expect(isWorkTaskManager('manager')).toBe(true);
     expect(isWorkTaskManager('employee')).toBe(false);
+  });
+});
+
+describe('isWorkTaskAgentCreated', () => {
+  it('detects agent metadata source', () => {
+    expect(isWorkTaskAgentCreated({ metadata: { source: 'agent' } })).toBe(true);
+    expect(isWorkTaskAgentCreated({ metadata: { source: 'work-tasks-agent' } })).toBe(true);
+    expect(isWorkTaskAgentCreated({ metadata: {} })).toBe(false);
+    expect(isWorkTaskAgentCreated({ metadata: { source: 'human' } })).toBe(false);
+  });
+});
+
+describe('work task attachment storage', () => {
+  it('defaults legacy rows without storage_mode to remote when path present', () => {
+    expect(getWorkTaskAttachmentStorageMode({ storage_mode: undefined, file_path: '/tmp/a.pdf' })).toBe('remote');
+    expect(getWorkTaskAttachmentStorageMode({ storage_mode: undefined, file_path: '' })).toBe('local');
+  });
+
+  it('allows open only for local uploader with local blob', () => {
+    const attachment = {
+      storage_mode: 'local' as const,
+      file_path: '',
+      uploaded_by_id: 'user_a',
+    };
+    expect(canOpenWorkTaskAttachment(attachment, 'user_a', true)).toBe(true);
+    expect(canOpenWorkTaskAttachment(attachment, 'user_b', true)).toBe(false);
+    expect(canOpenWorkTaskAttachment(attachment, 'user_a', false)).toBe(false);
+    expect(
+      canOpenWorkTaskAttachment(
+        { storage_mode: 'remote', file_path: '/tmp/a.pdf', uploaded_by_id: 'user_a' },
+        'user_a',
+        false
+      )
+    ).toBe(true);
+    expect(
+      canOpenWorkTaskAttachment(
+        { storage_mode: 'remote', file_path: '', uploaded_by_id: 'user_a' },
+        'user_a',
+        false
+      )
+    ).toBe(false);
   });
 });

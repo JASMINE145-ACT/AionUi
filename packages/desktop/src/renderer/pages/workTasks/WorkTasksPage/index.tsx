@@ -24,6 +24,7 @@ import {
   useWorkTasks,
 } from '@renderer/pages/workTasks/useWorkTasks';
 import WorkTaskStatusTag from '@renderer/pages/workTasks/components/WorkTaskStatusTag';
+import WorkTaskSourceTag from '@renderer/pages/workTasks/components/WorkTaskSourceTag';
 import CreateWorkTaskDialog from '@renderer/pages/workTasks/components/CreateWorkTaskDialog';
 
 const CollapseItem = Collapse.Item;
@@ -219,6 +220,7 @@ const WorkTasksPage: React.FC = () => {
                   <div className='flex items-center justify-between gap-8px'>
                     <span className='font-500 text-t-primary truncate'>{task.title}</span>
                     <div className='flex items-center gap-6px shrink-0'>
+                      <WorkTaskSourceTag task={task} />
                       {task.attachments.length > 0 && (
                         <Tag size='small'>{task.attachments.length}</Tag>
                       )}

@@ -39,6 +39,9 @@
     "dueAt": "截止",
     "overdue": "已逾期"
   },
+  "source": {
+    "agent": "AI 创建"
+  },
   "action": {
     "accept": "接受",
     "complete": "完成"
@@ -70,6 +73,8 @@
     "noAttachments": "暂无附件",
     "openAttachment": "打开",
     "downloadAttachment": "下载",
+    "localAttachmentHint": "附件仅保存在本机，不上传服务器；经理可见文件名，无法在其他电脑打开。",
+    "localAttachmentMetadataOnly": "仅上传者本机可打开",
     "changeStatus": "更改状态",
     "delete": "删除任务",
     "deleteConfirm": "确定删除此任务吗？",
@@ -82,6 +87,8 @@
     "attachmentAdded": "附件已添加",
     "attachmentRemoved": "附件已移除",
     "openAttachmentFailed": "无法打开附件",
-    "downloadAttachmentFailed": "无法下载附件"
+    "downloadAttachmentFailed": "无法下载附件",
+    "localAttachmentUnavailable": "此附件仅保存在上传者本机，当前设备无法打开",
+    "localAttachmentDesktopOnly": "附件上传仅支持桌面客户端"
   }
 }

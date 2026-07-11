@@ -39,6 +39,9 @@
     "dueAt": "Due",
     "overdue": "Overdue"
   },
+  "source": {
+    "agent": "AI created"
+  },
   "action": {
     "accept": "Accept",
     "complete": "Complete"
@@ -70,6 +73,8 @@
     "noAttachments": "No attachments",
     "openAttachment": "Open",
     "downloadAttachment": "Download",
+    "localAttachmentHint": "Attachments stay on this device only (not uploaded). Managers see filenames but cannot open them on other computers.",
+    "localAttachmentMetadataOnly": "Only available on uploader device",
     "changeStatus": "Change status",
     "delete": "Delete task",
     "deleteConfirm": "Delete this task?",
@@ -82,6 +87,8 @@
     "attachmentAdded": "Attachment added",
     "attachmentRemoved": "Attachment removed",
     "openAttachmentFailed": "Failed to open attachment",
-    "downloadAttachmentFailed": "Failed to download attachment"
+    "downloadAttachmentFailed": "Failed to download attachment",
+    "localAttachmentUnavailable": "This attachment is stored only on the uploader device",
+    "localAttachmentDesktopOnly": "Attachment upload requires the desktop app"
   }
 }
