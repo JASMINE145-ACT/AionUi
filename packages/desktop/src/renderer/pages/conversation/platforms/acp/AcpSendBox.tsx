@@ -12,6 +12,7 @@ import {
   setCcbSessionPreferredMode,
 } from '@/common/config/ccbSessionPreferredModeStore';
 import { resolveEffectiveAcpSessionMode } from '@/common/config/resolveEffectiveAcpSessionMode';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 import { normalizeCcbMiniMaxModelId } from '@/common/config/ccbAcpModelInfo';
 import { getCcbSessionPreferredModelId } from '@/common/config/ccbSessionPreferredModelStore';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
@@ -155,8 +156,8 @@ const AcpSendBox: React.FC<{
   const [currentMode, setCurrentMode] = useState<string | undefined>(session_mode);
 
   useEffect(() => {
-    seedCcbSessionPreferredMode(conversation_id, session_mode);
-  }, [conversation_id, session_mode]);
+    seedCcbSessionPreferredMode(conversation_id, session_mode, backend);
+  }, [backend, conversation_id, session_mode]);
 
   const prepareRuntimeSync = useCallback(async (options?: { force?: boolean }) => {
     if (teamPermission) {
@@ -203,11 +204,11 @@ const AcpSendBox: React.FC<{
   const handleAgentModeChanged = useCallback(
     (mode: string) => {
       setCurrentMode(mode);
-      setCcbSessionPreferredMode(conversation_id, mode);
-      void persistCcbSessionPreferredMode(conversation_id, mode);
+      setCcbSessionPreferredMode(conversation_id, mode, backend);
+      void persistCcbSessionPreferredMode(conversation_id, mode, backend);
       if (isLeaderInTeam) teamPermission?.propagateMode?.(mode);
     },
-    [conversation_id, isLeaderInTeam, teamPermission]
+    [backend, conversation_id, isLeaderInTeam, teamPermission]
   );
 
   const resolvePreferredSessionMode = useCallback(
@@ -215,8 +216,9 @@ const AcpSendBox: React.FC<{
       resolveEffectiveAcpSessionMode(
         getCcbSessionPreferredMode(conversation_id, currentMode),
         session_mode,
+        backend,
       ),
-    [conversation_id, currentMode, session_mode]
+    [backend, conversation_id, currentMode, session_mode]
   );
 
   // Mirror AgentModeSelector's getMode sync so the sheet shows the live mode label.
@@ -243,11 +245,15 @@ const AcpSendBox: React.FC<{
       if (mode === currentMode) return;
       try {
         await prepareRuntimeSync();
-        const confirmed = await ipcBridge.acpConversation.setMode.invoke({ conversation_id, mode });
-        const confirmedMode = confirmed.mode || mode;
+        const normalizedMode = normalizeAcpPermissionMode(backend, mode) || mode;
+        const confirmed = await ipcBridge.acpConversation.setMode.invoke({
+          conversation_id,
+          mode: normalizedMode,
+        });
+        const confirmedMode = confirmed.mode || normalizedMode;
         setCurrentMode(confirmedMode);
-        setCcbSessionPreferredMode(conversation_id, confirmedMode);
-        void persistCcbSessionPreferredMode(conversation_id, confirmedMode);
+        setCcbSessionPreferredMode(conversation_id, confirmedMode, backend);
+        void persistCcbSessionPreferredMode(conversation_id, confirmedMode, backend);
         if (backend && !assistantId) void savePreferredMode(backend, confirmedMode);
         if (isLeaderInTeam) teamPermission?.propagateMode?.(confirmedMode);
         Message.success(t('agentMode.switchSuccess'));
@@ -382,8 +388,9 @@ const AcpSendBox: React.FC<{
             const modeResult = await ensureCcbSessionPreferredMode({
               conversation_id,
               preferredMode,
+              backend,
             });
-            assertCcbSessionPreferredModeApplied(modeResult, preferredMode);
+            assertCcbSessionPreferredModeApplied(modeResult, preferredMode, backend);
           }
         }
         void checkAndUpdateTitle(conversation_id, input);

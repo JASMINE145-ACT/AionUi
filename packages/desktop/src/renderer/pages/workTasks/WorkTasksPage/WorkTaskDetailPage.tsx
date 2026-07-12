@@ -15,10 +15,13 @@ import { ipcBridge } from '@/common';
 import { CCB_DEFAULT_SESSION_AGENT_ID } from '@/common/config/ccbAgentCatalog';
 import type { WorkTaskAttachment, WorkTaskStatus } from '@/common/types/workTasks/workTaskTypes';
 import {
-  WORK_TASK_STATUSES,
   WORK_TASK_STATUS_I18N_KEY,
+  canAcceptWorkTask,
+  canDeleteWorkTask,
+  canEditWorkTaskMeta,
+  canManageWorkTaskAttachments,
   canOpenWorkTaskAttachment,
-  canTransitionWorkTaskStatus,
+  filterWorkTaskStatusOptions,
   getWorkTaskAttachmentStorageMode,
   isWorkTaskOverdue,
 } from '@/common/types/workTasks/workTaskTypes';
@@ -92,15 +95,17 @@ const WorkTaskDetailPage: React.FC = () => {
 
   const handleAccept = useCallback(async () => {
     if (!task_id || !task) return;
+    if (!canAcceptWorkTask(task, user?.id)) return;
     await ipcBridge.workTask.updateTask.invoke({ task_id, updates: { status: 'accepted' } });
     await mutate();
     Message.success(t('workTasks.message.updateSuccess'));
-  }, [mutate, t, task, task_id]);
+  }, [mutate, t, task, task_id, user?.id]);
 
   const handleStatusChange = useCallback(
     async (status: WorkTaskStatus) => {
       if (!task_id || !task) return;
-      if (!canTransitionWorkTaskStatus(task.status, status)) {
+      const allowed = filterWorkTaskStatusOptions(task, user?.id, user?.work_task_role);
+      if (!allowed.includes(status)) {
         Message.warning(t('workTasks.form.status'));
         return;
       }
@@ -108,15 +113,16 @@ const WorkTaskDetailPage: React.FC = () => {
       await mutate();
       Message.success(t('workTasks.message.updateSuccess'));
     },
-    [mutate, t, task, task_id]
+    [mutate, t, task, task_id, user?.id, user?.work_task_role]
   );
 
   const handleDelete = useCallback(() => {
-    if (!task_id) return;
+    if (!task_id || !task) return;
+    if (!canDeleteWorkTask(task, user?.id, user?.work_task_role)) return;
     Modal.confirm({
       title: t('workTasks.detail.deleteConfirm'),
       onOk: async () => {
-        if (task?.attachments.length) {
+        if (task.attachments.length) {
           await Promise.all(task.attachments.map((att) => deleteLocalWorkTaskAttachmentBlob(att.id).catch(() => undefined)));
         }
         await ipcBridge.workTask.deleteTask.invoke({ task_id });
@@ -124,13 +130,17 @@ const WorkTaskDetailPage: React.FC = () => {
         navigate('/tasks');
       },
     });
-  }, [navigate, t, task?.attachments, task_id]);
+  }, [navigate, t, task, task_id, user?.id, user?.work_task_role]);
 
   const handleFilePick = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       event.target.value = '';
-      if (!file || !task_id) return;
+      if (!file || !task_id || !task) return;
+      if (!canManageWorkTaskAttachments(task, user?.id)) {
+        Message.warning(t('workTasks.detail.localAttachmentMetadataOnly'));
+        return;
+      }
 
       if (!isElectronDesktop()) {
         Message.warning(t('workTasks.message.localAttachmentDesktopOnly'));
@@ -173,12 +183,13 @@ const WorkTaskDetailPage: React.FC = () => {
         setUploading(false);
       }
     },
-    [mutate, t, task_id]
+    [mutate, t, task, task_id, user?.id]
   );
 
   const handleRemoveAttachment = useCallback(
     async (attachment_id: string) => {
-      if (!task_id) return;
+      if (!task_id || !task) return;
+      if (!canManageWorkTaskAttachments(task, user?.id)) return;
       await ipcBridge.workTask.removeAttachment.invoke({ task_id, attachment_id });
       await deleteLocalWorkTaskAttachmentBlob(attachment_id).catch(() => undefined);
       setLocalBlobIds((prev) => {
@@ -189,7 +200,7 @@ const WorkTaskDetailPage: React.FC = () => {
       await mutate();
       Message.success(t('workTasks.message.attachmentRemoved'));
     },
-    [mutate, t, task_id]
+    [mutate, t, task, task_id, user?.id]
   );
 
   const handleOpenAttachment = useCallback(
@@ -333,9 +344,10 @@ const WorkTaskDetailPage: React.FC = () => {
     );
   }
 
-  const allowedStatuses = WORK_TASK_STATUSES.filter(
-    (s) => s !== task.status && canTransitionWorkTaskStatus(task.status, s)
-  );
+  const allowedStatuses = filterWorkTaskStatusOptions(task, user?.id, user?.work_task_role);
+  const canEditMeta = canEditWorkTaskMeta(task, user?.id, user?.work_task_role);
+  const canDelete = canDeleteWorkTask(task, user?.id, user?.work_task_role);
+  const canManageAttachments = canManageWorkTaskAttachments(task, user?.id);
 
   return (
     <div
@@ -383,10 +395,14 @@ const WorkTaskDetailPage: React.FC = () => {
             >
               {t('workTasks.detail.understand', { defaultValue: '了解任务' })}
             </Button>
-            <Button onClick={() => setEditVisible(true)}>{t('workTasks.form.edit')}</Button>
-            <Button status='danger' onClick={handleDelete}>
-              {t('workTasks.detail.delete')}
-            </Button>
+            {canEditMeta && (
+              <Button onClick={() => setEditVisible(true)}>{t('workTasks.form.edit')}</Button>
+            )}
+            {canDelete && (
+              <Button status='danger' onClick={handleDelete}>
+                {t('workTasks.detail.delete')}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -413,7 +429,7 @@ const WorkTaskDetailPage: React.FC = () => {
           ]}
         />
 
-        {task.status === 'pending_accept' && canTransitionWorkTaskStatus(task.status, 'accepted') && (
+        {canAcceptWorkTask(task, user?.id) && (
           <Button type='primary' onClick={() => void handleAccept()}>
             {t('workTasks.action.accept')}
           </Button>
@@ -440,9 +456,11 @@ const WorkTaskDetailPage: React.FC = () => {
         <div>
           <div className='flex items-center justify-between mb-8px'>
             <h2 className='m-0 text-16px font-600'>{t('workTasks.detail.attachments')}</h2>
-            <Button loading={uploading} onClick={() => fileInputRef.current?.click()}>
-              {t('workTasks.detail.addAttachment')}
-            </Button>
+            {canManageAttachments && (
+              <Button loading={uploading} onClick={() => fileInputRef.current?.click()}>
+                {t('workTasks.detail.addAttachment')}
+              </Button>
+            )}
             <input ref={fileInputRef} type='file' className='hidden' onChange={handleFilePick} />
           </div>
           <p className='text-12px text-t-tertiary m-0 mb-8px'>{t('workTasks.detail.localAttachmentHint')}</p>
@@ -487,9 +505,11 @@ const WorkTaskDetailPage: React.FC = () => {
                           onClick={() => void handleDownloadAttachment(att)}
                         />
                       ) : null}
-                      <Button size='mini' status='danger' onClick={() => void handleRemoveAttachment(att.id)}>
-                        ×
-                      </Button>
+                      {canManageAttachments && (
+                        <Button size='mini' status='danger' onClick={() => void handleRemoveAttachment(att.id)}>
+                          ×
+                        </Button>
+                      )}
                     </div>
                   </li>
                 );

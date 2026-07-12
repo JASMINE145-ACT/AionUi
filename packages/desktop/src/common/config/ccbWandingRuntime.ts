@@ -75,3 +75,23 @@ export function isCcbWandingAgent(agent?: CcbWandingAgentLike | null): boolean {
     haystack.includes('ccb-wanding-route-b')
   );
 }
+
+/**
+ * Fleet default: hide WeCom developer-docs outbound link.
+ * Dev machine only: set CCB_WANDING_WECOM_DEV_DOCS=1 (or true/yes) before launch.
+ * Renderer reads preload-injected `__wecomDevDocs` (main env → sync IPC); not raw process.env.
+ */
+export function isWecomDevDocsLinkEnabled(): boolean {
+  if (typeof window !== 'undefined') {
+    return Boolean((window as Window & { __wecomDevDocs?: boolean }).__wecomDevDocs);
+  }
+  try {
+    if (typeof process === 'undefined') {
+      return false;
+    }
+    const raw = (process.env.CCB_WANDING_WECOM_DEV_DOCS ?? '').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes';
+  } catch {
+    return false;
+  }
+}

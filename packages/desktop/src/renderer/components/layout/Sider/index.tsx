@@ -19,6 +19,7 @@ import {
   SiderMemoryEntry,
   SiderOrgKnowledgeEntry,
   SiderPriceLibraryEntry,
+  SiderSuppliersEntry,
 } from './SiderNav';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { usePrecipitationSummary } from '@/renderer/hooks/usePrecipitationSummary';
@@ -164,6 +165,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     }
   };
 
+  const handleSuppliersClick = () => {
+    cleanupSiderTooltips();
+    blurActiveElement();
+    closePreview();
+    setIsBatchMode(false);
+    Promise.resolve(navigate('/suppliers')).catch((error) => {
+      console.error('Navigation failed:', error);
+    });
+    if (onSessionClick) {
+      onSessionClick();
+    }
+  };
+
   const handleMemoryClick = () => {
     cleanupSiderTooltips();
     blurActiveElement();
@@ -297,6 +311,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               collapsed={collapsed}
               siderTooltipProps={siderTooltipProps}
               onClick={handlePriceLibraryClick}
+            />
+            <SiderSuppliersEntry
+              isMobile={isMobile}
+              isActive={pathname === '/suppliers'}
+              collapsed={collapsed}
+              siderTooltipProps={siderTooltipProps}
+              onClick={handleSuppliersClick}
             />
             {/* Divider between fixed top nav and scrollable content area */}
             <div

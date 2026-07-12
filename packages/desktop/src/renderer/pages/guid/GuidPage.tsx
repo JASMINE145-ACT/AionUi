@@ -188,8 +188,12 @@ const GuidPage: React.FC = () => {
   );
 
   const sessionAssistantDefaults = useMemo(
-    () => resolveGuidAssistantDefaults(sessionAssistantDetail),
-    [sessionAssistantDetail]
+    () =>
+      resolveGuidAssistantDefaults(
+        sessionAssistantDetail,
+        agentSelection.currentEffectiveAgentInfo.agent_type,
+      ),
+    [sessionAssistantDetail, agentSelection.currentEffectiveAgentInfo.agent_type]
   );
 
   const sessionSkillNames = useMemo(() => {
@@ -240,8 +244,12 @@ const GuidPage: React.FC = () => {
       })
   );
   const resolvedAssistantDefaults = useMemo(
-    () => resolveGuidAssistantDefaults(selectedAssistantDetail),
-    [selectedAssistantDetail]
+    () =>
+      resolveGuidAssistantDefaults(
+        selectedAssistantDetail,
+        agentSelection.currentEffectiveAgentInfo.agent_type,
+      ),
+    [selectedAssistantDetail, agentSelection.currentEffectiveAgentInfo.agent_type]
   );
 
   const send = useGuidSend({
@@ -439,7 +447,10 @@ const GuidPage: React.FC = () => {
     }
 
     if (selectedAssistantDetail) {
-      const resolvedDefaults = resolveGuidAssistantDefaults(selectedAssistantDetail);
+      const resolvedDefaults = resolveGuidAssistantDefaults(
+        selectedAssistantDetail,
+        agentSelection.currentEffectiveAgentInfo.agent_type,
+      );
       setGuidDisabledBuiltinSkills(resolvedDefaults.disabledBuiltinSkillIds);
       setGuidEnabledSkills(resolvedDefaults.skillIds);
       return;
@@ -452,7 +463,7 @@ const GuidPage: React.FC = () => {
       setGuidDisabledBuiltinSkills(undefined);
       setGuidEnabledSkills(undefined);
     }
-  }, [agentSelection.is_presetAgent, selectedAssistantDetail, selectedAssistantRecord]);
+  }, [agentSelection.is_presetAgent, selectedAssistantDetail, selectedAssistantRecord, agentSelection.currentEffectiveAgentInfo.agent_type]);
 
   const appliedAssistantDefaultsKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -477,8 +488,8 @@ const GuidPage: React.FC = () => {
     appliedAssistantDefaultsKeyRef.current = signature;
 
     const applyAssistantDefaults = async () => {
-      const resolvedDefaults = resolveGuidAssistantDefaults(selectedAssistantDetail);
       const effectiveBackend = agentSelection.currentEffectiveAgentInfo.agent_type;
+      const resolvedDefaults = resolveGuidAssistantDefaults(selectedAssistantDetail, effectiveBackend);
 
       if (effectiveBackend === 'aionrs') {
         if (resolvedDefaults.modelId) {

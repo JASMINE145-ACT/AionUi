@@ -12,8 +12,8 @@ let activePlugin = null;
 let wsClient = null;
 
 const streamStore = new Map();
-/** streamId -> { frame, streamId } for SDK replyStream */
-const replyContextByChat = new Map();
+/** streamId -> { frame, streamId, chatId? } for SDK replyStream (Mode A concurrency) */
+const replyContextByStream = new Map();
 
 function now() {
   return Date.now();
@@ -72,17 +72,22 @@ function getActivePlugin() {
   return activePlugin;
 }
 
-function setReplyContext(chatId, context) {
-  if (!chatId) return;
-  replyContextByChat.set(String(chatId), context);
+/** WANd.WECOM.REPLY.CTX.USER.001 — key by inbound streamId, never group chatId alone. */
+function setReplyContext(streamId, context) {
+  const key = String(streamId || '').trim();
+  if (!key) return;
+  replyContextByStream.set(key, context);
 }
 
-function getReplyContext(chatId) {
-  return replyContextByChat.get(String(chatId)) || null;
+function getReplyContext(streamId) {
+  const key = String(streamId || '').trim();
+  if (!key) return null;
+  return replyContextByStream.get(key) || null;
 }
 
-function clearReplyContext(chatId) {
-  if (chatId) replyContextByChat.delete(String(chatId));
+function clearReplyContext(streamId) {
+  const key = String(streamId || '').trim();
+  if (key) replyContextByStream.delete(key);
 }
 
 function upsertStream(streamId, payload) {
@@ -117,10 +122,12 @@ function cleanupExpiredRecords() {
     const age = current - stream.updatedAt;
     if (stream.finished && age > STREAM_IDLE_MS) {
       streamStore.delete(streamId);
+      replyContextByStream.delete(streamId);
       continue;
     }
     if (!stream.finished && age > STREAM_TTL_MS) {
       streamStore.delete(streamId);
+      replyContextByStream.delete(streamId);
     }
   }
 }
@@ -133,7 +140,7 @@ function resetAll() {
   activePlugin = null;
   wsClient = null;
   streamStore.clear();
-  replyContextByChat.clear();
+  replyContextByStream.clear();
 }
 
 module.exports = {

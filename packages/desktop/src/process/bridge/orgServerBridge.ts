@@ -35,6 +35,11 @@ ipcMain.on('get-force-relogin', (event) => {
   event.returnValue = process.env.AIONUI_FORCE_RELOGIN === '1';
 });
 
+ipcMain.on('get-wecom-dev-docs', (event) => {
+  const raw = (process.env.CCB_WANDING_WECOM_DEV_DOCS ?? '').trim().toLowerCase();
+  event.returnValue = raw === '1' || raw === 'true' || raw === 'yes';
+});
+
 ipcMain.handle('org-auth-write-token', (_event, payload: { token?: string | null }) => {
   writeOrgSessionTokenFile(payload?.token ?? null);
   return { success: true };

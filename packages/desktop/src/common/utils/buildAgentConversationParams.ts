@@ -6,6 +6,7 @@
 
 import type { ICreateConversationParams } from '@/common/adapter/ipcBridge';
 import type { TProviderWithModel } from '@/common/config/storage';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 
 export type BuildAgentConversationAssistantOverrides = {
   model?: string;
@@ -84,7 +85,10 @@ export function buildAgentConversationParams(input: BuildAgentConversationInput)
     }
   }
 
-  if (session_mode) extra.session_mode = session_mode;
+  if (session_mode) {
+    const backendForMode = type === 'acp' ? (extra.backend as string | undefined) || backend : backend;
+    extra.session_mode = normalizeAcpPermissionMode(backendForMode, session_mode) || session_mode;
+  }
   if (current_model_id) extra.current_model_id = current_model_id;
 
   return {

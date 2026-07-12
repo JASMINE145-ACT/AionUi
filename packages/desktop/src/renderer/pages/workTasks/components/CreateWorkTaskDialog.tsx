@@ -9,8 +9,11 @@ import { DatePicker, Form, Input, Select, Message } from '@arco-design/web-react
 import { useTranslation } from 'react-i18next';
 import ModalWrapper from '@renderer/components/base/ModalWrapper';
 import type { WorkTask, WorkTaskStatus } from '@/common/types/workTasks/workTaskTypes';
-import { WORK_TASK_STATUSES, canTransitionWorkTaskStatus } from '@/common/types/workTasks/workTaskTypes';
-import { WORK_TASK_STATUS_I18N_KEY } from '@/common/types/workTasks/workTaskTypes';
+import {
+  WORK_TASK_STATUSES,
+  WORK_TASK_STATUS_I18N_KEY,
+  filterWorkTaskStatusOptions,
+} from '@/common/types/workTasks/workTaskTypes';
 import { useWorkTaskMembers, useWorkTaskRole } from '@renderer/pages/workTasks/useWorkTasks';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 
@@ -50,16 +53,17 @@ const CreateWorkTaskDialog: React.FC<CreateWorkTaskDialogProps> = ({
 
   const statusOptions = useMemo(() => {
     if (editTask) {
+      const allowed = filterWorkTaskStatusOptions(editTask, user?.id, user?.work_task_role);
+      // Keep current status selectable so the form can display it.
       return WORK_TASK_STATUSES.filter(
-        (status) =>
-          status === editTask.status || canTransitionWorkTaskStatus(editTask.status, status)
+        (status) => status === editTask.status || allowed.includes(status)
       );
     }
     if (isManager && assigningOther) {
       return WORK_TASK_STATUSES.filter((status) => status === 'pending_accept');
     }
     return WORK_TASK_STATUSES.filter((status) => status === 'accepted');
-  }, [assigningOther, editTask, isManager]);
+  }, [assigningOther, editTask, isManager, user?.id, user?.work_task_role]);
 
   useEffect(() => {
     if (!visible) return;
@@ -84,9 +88,12 @@ const CreateWorkTaskDialog: React.FC<CreateWorkTaskDialogProps> = ({
     try {
       const values = await form.validate();
       const nextStatus = values.status as WorkTaskStatus | undefined;
-      if (editTask && nextStatus && !canTransitionWorkTaskStatus(editTask.status, nextStatus)) {
-        Message.error(t('workTasks.form.status'));
-        return;
+      if (editTask && nextStatus && nextStatus !== editTask.status) {
+        const allowed = filterWorkTaskStatusOptions(editTask, user?.id, user?.work_task_role);
+        if (!allowed.includes(nextStatus)) {
+          Message.error(t('workTasks.form.status'));
+          return;
+        }
       }
       setSubmitting(true);
       const dueAtValue = values.due_at as Date | undefined;

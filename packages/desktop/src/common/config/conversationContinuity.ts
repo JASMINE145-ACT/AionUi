@@ -179,7 +179,7 @@ export async function prepareConversationContinuity(
     (conversation.extra ?? {}) as Record<string, unknown>,
   );
   if (ctx.session_mode) {
-    seedCcbSessionPreferredMode(conversation_id, ctx.session_mode);
+    seedCcbSessionPreferredMode(conversation_id, ctx.session_mode, 'claude');
   }
 
   const stale = needsConversationRefresh(ctx);

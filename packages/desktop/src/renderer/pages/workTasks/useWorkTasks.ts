@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import type {
   WorkTask,
   WorkTaskMember,
+  WorkTaskQueryParams,
   WorkTaskQueryResponse,
   WorkTaskScope,
   WorkTaskStatus,
@@ -136,12 +137,15 @@ export function useWorkTaskMembers() {
   return { members: data ?? [], employees, loading: isLoading, error };
 }
 
-export function useWorkTaskQuery(enabled: boolean) {
-  const swrKey = enabled && isOrgServerConfigured() ? 'work-tasks/query/org' : null;
+export function useWorkTaskQuery(enabled: boolean, params?: WorkTaskQueryParams) {
+  const paramKey = params
+    ? `${params.assignee_id ?? ''}|${params.status ?? ''}`
+    : 'overview';
+  const swrKey = enabled && isOrgServerConfigured() ? `work-tasks/query/org/${paramKey}` : null;
 
   const { data, isLoading, mutate, error } = useSWR<WorkTaskQueryResponse | null>(
     swrKey,
-    () => ipcBridge.workTask.queryTasks.invoke({}),
+    () => ipcBridge.workTask.queryTasks.invoke(params ?? {}),
     { revalidateOnFocus: true, refreshInterval: WORK_TASKS_POLL_MS }
   );
 

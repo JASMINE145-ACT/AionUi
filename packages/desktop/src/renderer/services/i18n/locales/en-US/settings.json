@@ -288,7 +288,7 @@
   "employeeProfile": {
     "nav": "Personal info",
     "title": "Personal information",
-    "description": "Your name, department, and role. AI uses this in new conversations to recognize who you are.",
+    "description": "Organization fields sync from the company account server; you can add a daily address name and notes.",
     "displayName": "Name",
     "displayNamePlaceholder": "e.g. Jane Doe",
     "addressName": "Daily address name",
@@ -311,7 +311,13 @@
     "saveFailed": "Save failed. Please try again.",
     "privacyNote": "This information is sent to the AI model for personalized replies. Do not enter passwords or secrets.",
     "newSessionNote": "Changes apply only to new conversations started after saving.",
-    "emptyHint": "Leave blank to omit user identity from AI context."
+    "emptyHint": "Leave blank to omit user identity from AI context.",
+    "orgSectionTitle": "Organization (read-only)",
+    "clientSectionTitle": "Personal supplement (editable)",
+    "orgReadOnlyNote": "Name, department, and title are maintained by your org account and cannot be edited here.",
+    "orgUnavailableNote": "Could not load org account info; only personal supplement will be injected. Ensure org SSO login.",
+    "manager": "Manager",
+    "employmentStatus": "Employment status"
   },
   "about": "About",
   "advancedSettings": "Advanced Settings",

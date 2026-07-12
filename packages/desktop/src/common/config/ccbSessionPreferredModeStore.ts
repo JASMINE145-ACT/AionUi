@@ -9,24 +9,30 @@
  */
 
 import { conversation as conversationBridge } from '@/common/adapter/ipcBridge';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 
 const preferredModeByConversation = new Map<string, string>();
 
 export function seedCcbSessionPreferredMode(
   conversationId: string,
   mode: string | null | undefined,
+  backend?: string,
 ): void {
-  const trimmed = mode?.trim();
-  if (!trimmed) return;
+  const normalized = normalizeAcpPermissionMode(backend, mode);
+  if (!normalized) return;
   if (!preferredModeByConversation.has(conversationId)) {
-    preferredModeByConversation.set(conversationId, trimmed);
+    preferredModeByConversation.set(conversationId, normalized);
   }
 }
 
-export function setCcbSessionPreferredMode(conversationId: string, mode: string): void {
-  const trimmed = mode.trim();
-  if (!trimmed) return;
-  preferredModeByConversation.set(conversationId, trimmed);
+export function setCcbSessionPreferredMode(
+  conversationId: string,
+  mode: string,
+  backend?: string,
+): void {
+  const normalized = normalizeAcpPermissionMode(backend, mode);
+  if (!normalized) return;
+  preferredModeByConversation.set(conversationId, normalized);
 }
 
 export function getCcbSessionPreferredMode(
@@ -44,17 +50,18 @@ export function clearCcbSessionPreferredMode(conversationId: string): void {
 export async function persistCcbSessionPreferredMode(
   conversationId: string,
   mode: string,
+  backend?: string,
 ): Promise<boolean> {
-  const trimmed = mode.trim();
-  if (!trimmed) return false;
-  setCcbSessionPreferredMode(conversationId, trimmed);
+  const normalized = normalizeAcpPermissionMode(backend, mode);
+  if (!normalized) return false;
+  setCcbSessionPreferredMode(conversationId, normalized, backend);
   try {
     return await conversationBridge.update.invoke({
       id: conversationId,
       merge_extra: true,
       updates: {
         extra: {
-          session_mode: trimmed,
+          session_mode: normalized,
         },
       },
     });

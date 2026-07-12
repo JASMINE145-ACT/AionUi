@@ -942,6 +942,7 @@ export type I18nKey =
   | 'orgKnowledge.save'
   | 'orgKnowledge.title'
   | 'orgKnowledge.unconfigured'
+  | 'orgKnowledge.unknownUser'
   | 'orgKnowledge.updatedBy'
   | 'orgKnowledge.username'
   | 'orgKnowledge.versionLabel.initial'

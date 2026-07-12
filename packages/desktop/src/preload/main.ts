@@ -74,6 +74,9 @@ contextBridge.exposeInMainWorld('__bypassAuth', bypassAuth === true);
 const forceRelogin = ipcRenderer.sendSync('get-force-relogin') as boolean;
 contextBridge.exposeInMainWorld('__forceRelogin', forceRelogin === true);
 
+const wecomDevDocs = ipcRenderer.sendSync('get-wecom-dev-docs') as boolean;
+contextBridge.exposeInMainWorld('__wecomDevDocs', wecomDevDocs === true);
+
 // 托盘事件监听 - 将 IPC 事件转换为 DOM 事件
 // Tray event listeners - convert IPC events to DOM events
 const trayEvents = [

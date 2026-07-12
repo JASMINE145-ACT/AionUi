@@ -15,6 +15,7 @@
   "offline": "Offline",
   "loggedInAs": "Account: {{user}}",
   "updatedBy": "By: {{user}}",
+  "unknownUser": "Unknown user",
   "noHistory": "No revision history",
   "versionLabel": {
     "initial": "Initial version",

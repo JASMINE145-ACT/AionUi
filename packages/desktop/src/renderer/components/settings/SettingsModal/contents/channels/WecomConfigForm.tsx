@@ -11,6 +11,7 @@ import type { IChannelPairingRequest, IChannelPluginStatus, IChannelUser } from 
 import { channel, type IWebUIStatus } from '@/common/adapter/ipcBridge';
 import { getAgents } from '@/renderer/hooks/agent/useAgents';
 import { configService } from '@/common/config/configService';
+import { isWecomDevDocsLinkEnabled } from '@/common/config/ccbWandingRuntime';
 import { openExternalUrl } from '@/renderer/utils/platform';
 import GoogleModelSelector from '@/renderer/pages/conversation/platforms/gemini/GoogleModelSelector';
 import type { GoogleModelSelection } from '@/renderer/pages/conversation/platforms/gemini/useGoogleModelSelection';
@@ -341,16 +342,18 @@ const WecomConfigForm: React.FC<WecomConfigFormProps> = ({
           )}
         </div>
         <div className='mt-4px'>
-          <a
-            className='text-primary hover:underline cursor-pointer text-12px'
-            href={WECOM_DEV_DOCS_URL}
-            onClick={(e) => {
-              e.preventDefault();
-              openExternalUrl(WECOM_DEV_DOCS_URL).catch(console.error);
-            }}
-          >
-            {t('settings.wecom.devDocLink', 'WeCom developer documentation')}
-          </a>
+          {isWecomDevDocsLinkEnabled() ? (
+            <a
+              className='text-primary hover:underline cursor-pointer text-12px'
+              href={WECOM_DEV_DOCS_URL}
+              onClick={(e) => {
+                e.preventDefault();
+                openExternalUrl(WECOM_DEV_DOCS_URL).catch(console.error);
+              }}
+            >
+              {t('settings.wecom.devDocLink', 'WeCom developer documentation')}
+            </a>
+          ) : null}
         </div>
       </div>
 

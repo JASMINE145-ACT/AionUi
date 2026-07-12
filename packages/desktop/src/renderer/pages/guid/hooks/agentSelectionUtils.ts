@@ -5,6 +5,7 @@
  */
 
 import { configService } from '@/common/config/configService';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 import type { AgentMetadata, AgentSource } from '@/renderer/utils/model/agentTypes';
 
 /** WanD / CCB Guid execution engine backend (oracle agentSelectionUtils). */
@@ -33,14 +34,15 @@ export function findCcbClaudeAgent<T extends ExecutionEngineAgentLike>(
 
 /** Save preferred mode to the agent's own config key */
 export async function savePreferredMode(agentKey: string, mode: string): Promise<void> {
+  const normalizedMode = normalizeAcpPermissionMode(agentKey, mode) || mode;
   try {
     if (agentKey === 'aionrs') {
       const config = configService.get('aionrs.config');
-      await configService.set('aionrs.config', { ...config, preferredMode: mode });
+      await configService.set('aionrs.config', { ...config, preferredMode: normalizedMode });
     } else if (agentKey !== 'custom') {
       const config = configService.get('acp.config');
       const backendConfig = config?.[agentKey as string] || {};
-      await configService.set('acp.config', { ...config, [agentKey]: { ...backendConfig, preferredMode: mode } });
+      await configService.set('acp.config', { ...config, [agentKey]: { ...backendConfig, preferredMode: normalizedMode } });
     }
   } catch {
     /* silent */

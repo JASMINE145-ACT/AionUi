@@ -78,6 +78,17 @@ describe('resolveGuidAssistantDefaults', () => {
     });
   });
 
+  it('maps yolo to bypassPermissions for Claude/CCB backends', () => {
+    const detail = buildDetail({
+      permission: { mode: 'fixed', value: 'yolo' },
+    });
+    detail.engine.agent_backend = 'claude';
+
+    const resolved = resolveGuidAssistantDefaults(detail);
+
+    expect(resolved.permissionMode).toBe('bypassPermissions');
+  });
+
   it('falls back to remembered values for auto defaults', () => {
     const resolved = resolveGuidAssistantDefaults(
       buildDetail(

@@ -19,7 +19,7 @@ import type { CcbSkillImportResult, CcbSkillInfo, CcbSkillPaths } from '../confi
 import type { CcbSkillSyncResult } from '../config/ccbSkillsSyncShared';
 import type { IMcpServer } from '../config/storage';
 import type { CcbUpdateApplyResult, CcbUpdateCheckResult } from '../update/updateTypes';
-import type { EmployeeProfile } from '../config/employeeProfileShared';
+import type { EmployeeClientProfile, EmployeeOrgContext } from '../config/employeeOrgContextShared';
 import type { CcbPersonalMemoryLearningStatus } from '../config/ccbPersonalMemoryLearning';
 import type { MemoryFileContent, MemoryFileSummary, MemoryScope } from '../config/ccbMemoryFiles';
 import type {
@@ -113,9 +113,10 @@ export const ccbUpdate = {
 };
 
 export const ccbEmployeeProfileService = {
-  syncProfile: bridge.buildProvider<void, { profile: EmployeeProfile | null }>(
-    'ccb.employeeProfile.syncProfile'
-  ),
+  syncProfile: bridge.buildProvider<
+    void,
+    { org?: EmployeeOrgContext | null; client?: EmployeeClientProfile | null; profile?: import('../config/employeeProfileShared').EmployeeProfile | null }
+  >('ccb.employeeProfile.syncProfile'),
 };
 
 export const ccbPersonalMemoryService = {

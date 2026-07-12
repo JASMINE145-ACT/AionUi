@@ -87,13 +87,25 @@ function shouldIgnoreGroupMessage(body, options = {}) {
   return false;
 }
 
-function toUnifiedIncomingMessage(payload, botId) {
+function toUnifiedIncomingMessage(payload, botId, options = {}) {
   const msgType = payload?.msgtype || 'text';
   const fromUserId = payload?.from?.userid || payload?.from_userid || payload?.userid || 'wecom-user';
   const fromName = payload?.from?.name || fromUserId;
   const chatId = resolveChatId(payload);
   const normalizedBotId = String(botId || payload?.aibotid || '').trim();
-  const text = extractInboundText(payload);
+  const attachments = Array.isArray(options.attachments) ? options.attachments : [];
+  const contentType =
+    options.contentType ||
+    (attachments.length
+      ? attachments.some((a) => /\.(xlsx|xls|csv|pdf|docx|txt)$/i.test(a.file_name || ''))
+        ? 'document'
+        : 'photo'
+      : msgType === 'file'
+        ? 'document'
+        : msgType === 'image'
+          ? 'photo'
+          : 'text');
+  const text = options.text != null ? String(options.text) : extractInboundText(payload);
 
   return {
     id: payload?.msgid || `${PLUGIN_ID}-${Date.now()}`,
@@ -106,9 +118,11 @@ function toUnifiedIncomingMessage(payload, botId) {
       platformUserId: fromUserId,
     },
     content: {
-      type: msgType === 'command' ? 'command' : 'text',
+      type: msgType === 'command' ? 'command' : contentType,
       text,
+      attachments,
     },
+    attachments,
     timestamp: payload?.create_time ? payload.create_time * 1000 : Date.now(),
     raw: payload,
     _wecomMeta: {

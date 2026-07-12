@@ -12,6 +12,7 @@ import {
   acpAdapterGetMode,
   acpAdapterSetMode,
 } from '@/common/adapter/acpConfigOptionsAdapter';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 
 export type EnsureCcbSessionPreferredModeResult =
   | { status: 'not_applicable' }
@@ -22,8 +23,10 @@ export type EnsureCcbSessionPreferredModeResult =
 export async function ensureCcbSessionPreferredMode(params: {
   conversation_id: string;
   preferredMode: string;
+  /** ACP backend id (claude / gemini / …). Defaults to claude for CCB paths. */
+  backend?: string;
 }): Promise<EnsureCcbSessionPreferredModeResult> {
-  const preferredMode = params.preferredMode.trim();
+  const preferredMode = normalizeAcpPermissionMode(params.backend, params.preferredMode);
   if (!preferredMode) {
     return { status: 'not_applicable' };
   }
@@ -53,8 +56,9 @@ export async function ensureCcbSessionPreferredMode(params: {
 export function assertCcbSessionPreferredModeApplied(
   result: EnsureCcbSessionPreferredModeResult,
   preferredMode: string,
+  backend?: string,
 ): void {
-  const preferred = preferredMode.trim();
+  const preferred = normalizeAcpPermissionMode(backend, preferredMode);
   if (!preferred) return;
 
   if (result.status === 'not_applicable') {

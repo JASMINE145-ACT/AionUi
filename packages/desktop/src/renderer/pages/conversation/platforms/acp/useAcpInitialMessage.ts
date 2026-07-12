@@ -89,12 +89,13 @@ export const useAcpInitialMessage = ({
             initialSessionMode,
           )?.trim();
           if (preferredMode) {
-            seedCcbSessionPreferredMode(conversation_id, preferredMode);
+            seedCcbSessionPreferredMode(conversation_id, preferredMode, backend);
             const modeResult = await ensureCcbSessionPreferredMode({
               conversation_id,
               preferredMode,
+              backend,
             });
-            assertCcbSessionPreferredModeApplied(modeResult, preferredMode);
+            assertCcbSessionPreferredModeApplied(modeResult, preferredMode, backend);
           }
         }
 

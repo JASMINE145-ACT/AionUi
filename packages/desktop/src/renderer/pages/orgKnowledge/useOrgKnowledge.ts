@@ -11,6 +11,11 @@ import type {
   OrgKnowledgeDocSummary,
   OrgKnowledgeRevisionSummary,
 } from '@/common/types/orgKnowledge/orgKnowledgeTypes';
+import {
+  buildOrgKnowledgeUserLabelLookup,
+  historyNeedsUserLabelLookup,
+  type OrgKnowledgeUserLabelLookup,
+} from '@/common/types/orgKnowledge/orgKnowledgeDisplay';
 import { isOrgServerConfigured } from '@/common/adapter/orgHttpBridge';
 
 export function useOrgKnowledgeList() {
@@ -32,6 +37,23 @@ export function useOrgKnowledgeHistory(slug: string | null) {
     slug && isOrgServerConfigured() ? ['org-knowledge.history', slug] : null,
     () => ipcBridge.orgKnowledge.listHistory.invoke({ slug: slug! })
   );
+}
+
+/** Resolve user id → username when API omits `updated_by` (e.g. org VPS not yet upgraded). */
+export function useOrgKnowledgeUserLabelLookup(
+  history: OrgKnowledgeRevisionSummary[] | undefined,
+  enabled: boolean
+): OrgKnowledgeUserLabelLookup | undefined {
+  const needLookup = enabled && historyNeedsUserLabelLookup(history);
+  const { data } = useSWR(
+    needLookup && isOrgServerConfigured() ? 'org-knowledge.user-labels' : null,
+    async () => {
+      const members = await ipcBridge.workTask.listMembers.invoke();
+      return buildOrgKnowledgeUserLabelLookup(members);
+    },
+    { revalidateOnFocus: false }
+  );
+  return data;
 }
 
 export async function saveOrgKnowledgeDoc(params: {

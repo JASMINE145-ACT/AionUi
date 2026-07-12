@@ -49,6 +49,14 @@ import type {
   PublishPriceDraftResult,
   UpsertPriceDraftItemParams,
 } from '../types/priceLibrary/priceLibraryTypes';
+import type {
+  LogisticsVehicleListResponse,
+  SupplierListResponse,
+  SupplierMatchResponse,
+  UpsertLogisticsVehicleParams,
+  UpsertResult,
+  UpsertSupplierParams,
+} from '../types/supplierDirectory/supplierDirectoryTypes';
 import type { AcpModelInfo } from '../types/platform/acpTypes';
 import type {
   CreateProviderRequest,
@@ -77,6 +85,7 @@ import type {
   UpdateWorkTaskParams,
   WorkTask,
   WorkTaskMember,
+  WorkTaskQueryParams,
   WorkTaskQueryResponse,
   WorkTaskScope,
   WorkTaskStatus,
@@ -797,6 +806,25 @@ export const priceLibrary = {
   ),
 };
 
+export const supplierDirectory = {
+  listSuppliers: orgHttpGet<SupplierListResponse, { q?: string; category?: string } | undefined>((p) => {
+    const qs = new URLSearchParams();
+    if (p?.q) qs.set('q', p.q);
+    if (p?.category) qs.set('category', p.category);
+    const query = qs.toString();
+    return `/api/suppliers${query ? `?${query}` : ''}`;
+  }),
+  matchProducts: orgHttpGet<SupplierMatchResponse, { q: string; top_n?: number }>((p) => {
+    const qs = new URLSearchParams();
+    qs.set('q', p.q);
+    if (p.top_n != null) qs.set('top_n', String(p.top_n));
+    return `/api/suppliers/match?${qs.toString()}`;
+  }),
+  upsertSupplier: orgHttpPost<UpsertResult, UpsertSupplierParams>('/api/suppliers'),
+  listVehicles: orgHttpGet<LogisticsVehicleListResponse, void>('/api/logistics-vehicles'),
+  upsertVehicle: orgHttpPost<UpsertResult, UpsertLogisticsVehicleParams>('/api/logistics-vehicles'),
+};
+
 export const workTask = {
   listTasks: orgHttpGet<WorkTask[], { scope?: WorkTaskScope; status?: WorkTaskStatus }>((p = {}) => {
     const qs = new URLSearchParams();
@@ -815,7 +843,13 @@ export const workTask = {
   listMembers: withResponseMap(orgHttpGet<AuthUser[], void>('/api/users'), (users) =>
     users.map((user) => normalizeAuthUser(user))
   ),
-  queryTasks: orgHttpGet<WorkTaskQueryResponse, Record<string, never>>('/api/work-tasks/query'),
+  queryTasks: orgHttpGet<WorkTaskQueryResponse, WorkTaskQueryParams | undefined>((p) => {
+    const qs = new URLSearchParams();
+    if (p?.status) qs.set('status', p.status);
+    if (p?.assignee_id) qs.set('assignee_id', p.assignee_id);
+    const query = qs.toString();
+    return `/api/work-tasks/query${query ? `?${query}` : ''}`;
+  }),
   addAttachment: orgHttpPost<WorkTask, AddWorkTaskAttachmentParams>(
     (p) => `/api/work-tasks/${encodeURIComponent(p.task_id)}/attachments`,
     (p) => ({

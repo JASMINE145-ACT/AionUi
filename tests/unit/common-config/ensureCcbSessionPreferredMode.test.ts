@@ -72,4 +72,35 @@ describe('ensureCcbSessionPreferredMode', () => {
       ),
     ).toThrow('Permission mode not confirmed');
   });
+
+  it('maps preferredMode yolo to bypassPermissions for Claude before setMode', async () => {
+    getModeMock.mockResolvedValue({ mode: 'default', initialized: true });
+
+    const result = await ensureCcbSessionPreferredMode({
+      conversation_id: 'conv-1',
+      preferredMode: 'yolo',
+      backend: 'claude',
+    });
+
+    expect(result).toEqual({
+      status: 'applied',
+      previous_backend_mode: 'default',
+      confirmed_mode: 'bypassPermissions',
+    });
+    expect(setModeMock).toHaveBeenCalledWith('conv-1', 'bypassPermissions');
+  });
+
+  it('assert accepts preferred yolo when confirmed is bypassPermissions', () => {
+    expect(() =>
+      assertCcbSessionPreferredModeApplied(
+        {
+          status: 'applied',
+          previous_backend_mode: 'default',
+          confirmed_mode: 'bypassPermissions',
+        },
+        'yolo',
+        'claude',
+      ),
+    ).not.toThrow();
+  });
 });

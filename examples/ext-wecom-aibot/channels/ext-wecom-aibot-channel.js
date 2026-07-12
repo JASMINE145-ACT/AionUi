@@ -14,10 +14,23 @@ const {
   disconnectClient,
   readCredentials,
   replyStreamForChat,
+  uploadAndReplyFileForChat,
   redactCredentials,
   waitForAuthenticated,
+  getWsClient,
 } = require('./sdk-runtime');
 const { shouldIgnoreGroupMessage, toUnifiedIncomingMessage } = require('./inbound');
+const {
+  resolveInboundAttachments,
+  cleanupExpiredInboundFiles,
+  inboundContentType,
+  buildInboundText,
+} = require('./inbound-media');
+const {
+  resolveFileFromMessage,
+  planOutboundSend,
+  auditOutboundFile,
+} = require('./outbound-file');
 
 class ExtWecomAibotChannel {
   constructor(config) {
@@ -44,15 +57,16 @@ class ExtWecomAibotChannel {
     setActivePlugin(this);
     this.running = true;
 
-    const onTextFrame = async (frame) => {
+    const onInboundFrame = async (frame) => {
       await this._handleIncomingFrame(frame);
     };
 
-    connectClient(this.config, { onTextFrame });
+    connectClient(this.config, { onInboundFrame });
     await waitForAuthenticated();
 
     this._pollTimer = setInterval(() => {
       cleanupExpiredRecords();
+      cleanupExpiredInboundFiles();
     }, 15_000);
 
     return { ok: true, pluginId: PLUGIN_ID, credentials: redactCredentials(this.config) };
@@ -94,10 +108,21 @@ class ExtWecomAibotChannel {
     const chatId = resolveChatId(body);
     const streamId = generateReqId('stream');
 
-    setReplyContext(chatId, { frame, streamId });
+    setReplyContext(streamId, { frame, streamId, chatId });
     upsertStream(streamId, { chatId, visibleContent: '', finished: false });
 
-    const unified = toUnifiedIncomingMessage(body, botId);
+    const botIdForCtx = String(this.config?.credentials?.botId || this.config?.credentials?.bot_id || '').trim();
+    const client = getWsClient();
+    const { attachments, failures } = await resolveInboundAttachments(client, body, {
+      botId: botIdForCtx,
+      chatId,
+    });
+    const text = buildInboundText(body, attachments, failures);
+    const unified = toUnifiedIncomingMessage(body, botId, {
+      attachments,
+      text,
+      contentType: inboundContentType(body?.msgtype, attachments),
+    });
     unified.raw = {
       ...body,
       __frame: frame,
@@ -110,6 +135,20 @@ class ExtWecomAibotChannel {
     await this.messageHandler(unified);
   }
 
+  _messageText(message) {
+    if (typeof message === 'string') return String(message || '');
+    return message?.content?.text || message?.text || '';
+  }
+
+  _messageType(message) {
+    if (typeof message === 'string') return 'text';
+    return String(message?.messageType || message?.type || 'text').toLowerCase();
+  }
+
+  /**
+   * OUT.CTX.001: replyMedia before finish=true clears reply context.
+   * OUT.DEGRADE.001: validation/upload failures become text fallback.
+   */
   async sendMessage(chatId, message, options = {}) {
     if (!this.running) throw new Error('ext-wecom-aibot plugin is not running');
     const conversationId = options?.conversationId;
@@ -117,12 +156,14 @@ class ExtWecomAibotChannel {
       typeof chatId === 'string'
         ? chatId
         : options?.chatId || (conversationId ? this._chatIdFromConversation(conversationId) : '');
-    const content =
-      typeof message === 'string'
-        ? message
-        : message?.content?.text || message?.text || String(message || '');
-    const streamId = options?.streamId || generateReqId('stream');
+    const content = this._messageText(message);
+    const messageType = this._messageType(message);
+    const streamId = String(options?.streamId || '').trim();
+    if (!streamId) {
+      throw new Error('ext-wecom-aibot: sendMessage requires options.streamId (reply context)');
+    }
     const finish = options?.finish !== false;
+    const allowlistOptions = options?.outboundFile || {};
 
     upsertStream(streamId, {
       chatId: resolvedChatId,
@@ -130,10 +171,42 @@ class ExtWecomAibotChannel {
       finished: finish,
     });
 
-    await replyStreamForChat(resolvedChatId, String(content || ''), finish);
+    const fileMessage =
+      messageType === 'file' ? resolveFileFromMessage(message, allowlistOptions) : null;
+    const plan = planOutboundSend({
+      messageType,
+      text: content,
+      finish,
+      fileMessage,
+      allowlistOptions,
+    });
+
+    for (const step of plan) {
+      if (step.type === 'stream') {
+        await replyStreamForChat(resolvedChatId, step.content || '', !!step.finish, streamId);
+      } else if (step.type === 'media') {
+        try {
+          await uploadAndReplyFileForChat(resolvedChatId, step.file, streamId);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          auditOutboundFile('upload_failed', {
+            basename: step.file?.fileName,
+            ok: false,
+            reason,
+          });
+          await replyStreamForChat(
+            resolvedChatId,
+            `[文件发送失败] ${step.file?.fileName || 'file'} — ${reason}`,
+            false,
+            streamId
+          );
+        }
+      }
+    }
+
     this.metrics.sent += 1;
     this.metrics.lastEventAt = Date.now();
-    return { streamId, chatId: resolvedChatId, finished: finish };
+    return { streamId, chatId: resolvedChatId, finished: finish, messageType };
   }
 
   async editMessage(chatId, messageId, message, options = {}) {
@@ -142,7 +215,7 @@ class ExtWecomAibotChannel {
         ? message
         : message?.content?.text || message?.text || String(message || '');
     const finish = options?.finish === true;
-    return this.sendMessage(chatId, content, {
+    return this.sendMessage(chatId, typeof message === 'object' && message ? message : content, {
       ...options,
       streamId: messageId || options?.streamId,
       finish,

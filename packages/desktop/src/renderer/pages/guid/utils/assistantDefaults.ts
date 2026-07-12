@@ -1,4 +1,11 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 
 export type ResolvedGuidAssistantDefaults = {
   modelId?: string;
@@ -9,7 +16,8 @@ export type ResolvedGuidAssistantDefaults = {
 };
 
 export const resolveGuidAssistantDefaults = (
-  detail: AssistantDetail | null | undefined
+  detail: AssistantDetail | null | undefined,
+  backend?: string,
 ): ResolvedGuidAssistantDefaults => {
   if (!detail) {
     return {
@@ -21,6 +29,8 @@ export const resolveGuidAssistantDefaults = (
     };
   }
 
+  const effectiveBackend = backend ?? detail.engine?.agent_backend ?? 'claude';
+
   const modelId =
     detail.defaults.model.mode === 'fixed'
       ? detail.defaults.model.value
@@ -28,12 +38,13 @@ export const resolveGuidAssistantDefaults = (
         ? detail.preferences.last_model_id
         : undefined;
 
-  const permissionMode =
+  const rawPermissionMode =
     detail.defaults.permission.mode === 'fixed'
       ? detail.defaults.permission.value
       : detail.defaults.permission.mode === 'auto'
         ? detail.preferences.last_permission_value
         : undefined;
+  const permissionMode = normalizeAcpPermissionMode(effectiveBackend, rawPermissionMode) || undefined;
 
   const skillIds =
     detail.defaults.skills.mode === 'fixed'
@@ -58,7 +69,7 @@ export const resolveGuidAssistantDefaults = (
 
   return {
     modelId: modelId || undefined,
-    permissionMode: permissionMode || undefined,
+    permissionMode,
     skillIds,
     disabledBuiltinSkillIds,
     mcpIds,

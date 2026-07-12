@@ -10,7 +10,8 @@ import type { ICreateConversationParams } from '@/common/adapter/ipcBridge';
 import type { IProvider, TProviderWithModel } from '@/common/config/storage';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { DEFAULT_CODEX_MODELS } from '@/common/types/codex/codexModels';
-import { CODEX_MODE_NATIVE_FULL_ACCESS, normalizeCodexMode } from '@/common/types/codex/codexModes';
+import { normalizeCodexMode } from '@/common/types/codex/codexModes';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 import { resolveLocaleKey } from '@/common/utils';
 import {
   buildAgentConversationParams,
@@ -25,12 +26,6 @@ import { hasSpecificModelCapability } from '@/renderer/utils/model/modelCapabili
 type ModePreference = {
   preferredMode?: string;
   yoloMode?: boolean;
-};
-
-const LEGACY_YOLO_MODE_MAP: Partial<Record<string, string>> = {
-  claude: 'bypassPermissions',
-  codex: CODEX_MODE_NATIVE_FULL_ACCESS,
-  qwen: 'yolo',
 };
 
 async function resolvePreferredMode(backend: string): Promise<string | undefined> {
@@ -48,15 +43,18 @@ async function resolvePreferredMode(backend: string): Promise<string | undefined
     preference = acpConfig?.[backend as string];
   }
 
-  const normalizedPreferredMode =
+  const rawPreferred =
     backend === 'codex' ? normalizeCodexMode(preference?.preferredMode) : preference?.preferredMode;
+  const normalizedPreferredMode = normalizeAcpPermissionMode(backend, rawPreferred) || rawPreferred;
   if (normalizedPreferredMode && modeOptions.some((option) => option.value === normalizedPreferredMode)) {
     return normalizedPreferredMode;
   }
 
-  const legacyMode = LEGACY_YOLO_MODE_MAP[backend];
-  if (preference?.yoloMode && legacyMode && modeOptions.some((option) => option.value === legacyMode)) {
-    return legacyMode;
+  if (preference?.yoloMode) {
+    const legacyMode = normalizeAcpPermissionMode(backend, 'yolo');
+    if (legacyMode && modeOptions.some((option) => option.value === legacyMode)) {
+      return legacyMode;
+    }
   }
 
   return undefined;

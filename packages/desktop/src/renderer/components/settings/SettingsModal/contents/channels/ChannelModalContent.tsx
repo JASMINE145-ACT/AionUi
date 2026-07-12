@@ -246,22 +246,13 @@ const ChannelModalContent: React.FC = () => {
     }
   }, []);
 
-  const wecomAutoExpandedRef = useRef(false);
-
   // Initial load
   useEffect(() => {
     void loadPluginStatus();
   }, [loadPluginStatus]);
 
-  // Auto-expand WeCom extension card once when first discovered
-  useEffect(() => {
-    if (wecomAutoExpandedRef.current || !extensionStatuses['ext-wecom-aibot']) return;
-    wecomAutoExpandedRef.current = true;
-    setCollapseKeys((prev) => ({
-      ...prev,
-      'ext-wecom-aibot': false,
-    }));
-  }, [extensionStatuses]);
+  // Fleet default: keep WeCom extension card collapsed (no auto-expand).
+  // Dev docs link is gated separately via CCB_WANDING_WECOM_DEV_DOCS.
 
   useEffect(() => {
     const loadWebuiStatus = async () => {

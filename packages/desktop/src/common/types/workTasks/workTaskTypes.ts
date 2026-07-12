@@ -108,6 +108,12 @@ export type WorkTaskQueryResponse = {
   items: WorkTask[];
 };
 
+/** Manager `/api/work-tasks/query` query string (P6 drill-down). Never includes overdue — filter client-side. */
+export type WorkTaskQueryParams = {
+  status?: WorkTaskStatus;
+  assignee_id?: string;
+};
+
 export const WORK_TASK_STATUSES: WorkTaskStatus[] = [
   'pending_accept',
   'accepted',
@@ -149,6 +155,106 @@ export function canTransitionWorkTaskStatus(from: WorkTaskStatus, to: WorkTaskSt
     default:
       return false;
   }
+}
+
+/** True when current user is the task assignee (id match). */
+export function isWorkTaskAssignee(
+  task: Pick<WorkTask, 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null
+): boolean {
+  if (!currentUserId) return false;
+  const assigneeId = task.assignee?.id ?? task.assignee_id ?? null;
+  return assigneeId === currentUserId;
+}
+
+/**
+ * 「接受」CTA — assignee-only (WANd.TASKS.ACCEPT_ACTOR.001 Option A).
+ * Graph edge alone is not enough; manager-creators must not see Accept.
+ */
+export function canAcceptWorkTask(
+  task: Pick<WorkTask, 'status' | 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null
+): boolean {
+  if (task.status !== 'pending_accept') return false;
+  if (!canTransitionWorkTaskStatus('pending_accept', 'accepted')) return false;
+  return isWorkTaskAssignee(task, currentUserId);
+}
+
+/**
+ * Status options for the change-status select, filtered by actor.
+ * Non-assignees cannot choose `accepted` from `pending_accept`.
+ * Only assignee or manager may change status at all (Q1=B / Q2=A).
+ */
+export function filterWorkTaskStatusOptions(
+  task: Pick<WorkTask, 'status' | 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null,
+  role?: string | null,
+  statuses: readonly WorkTaskStatus[] = WORK_TASK_STATUSES
+): WorkTaskStatus[] {
+  if (!canChangeWorkTaskStatus(task, currentUserId, role)) {
+    return [];
+  }
+  return statuses.filter((to) => {
+    if (to === task.status) return false;
+    if (!canTransitionWorkTaskStatus(task.status, to)) return false;
+    if (task.status === 'pending_accept' && to === 'accepted') {
+      return isWorkTaskAssignee(task, currentUserId);
+    }
+    return true;
+  });
+}
+
+/** Assignee or any manager may drive non-accept status edges. */
+export function canChangeWorkTaskStatus(
+  task: Pick<WorkTask, 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null,
+  role?: string | null
+): boolean {
+  return isWorkTaskAssignee(task, currentUserId) || isWorkTaskManager(role);
+}
+
+export function canCompleteWorkTask(
+  task: Pick<WorkTask, 'status' | 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null,
+  role?: string | null
+): boolean {
+  if (!canTransitionWorkTaskStatus(task.status, 'completed')) return false;
+  return canChangeWorkTaskStatus(task, currentUserId, role);
+}
+
+/** Q1=B: any manager, or the creator. */
+export function canEditWorkTaskMeta(
+  task: Pick<WorkTask, 'created_by_id' | 'created_by'>,
+  currentUserId: string | undefined | null,
+  role?: string | null
+): boolean {
+  if (isWorkTaskManager(role)) return true;
+  if (!currentUserId) return false;
+  const creatorId = task.created_by?.id ?? task.created_by_id;
+  return creatorId === currentUserId;
+}
+
+/** Q1=B: any manager, or creator∧assignee (self-owned). */
+export function canDeleteWorkTask(
+  task: Pick<WorkTask, 'created_by_id' | 'created_by' | 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null,
+  role?: string | null
+): boolean {
+  if (isWorkTaskManager(role)) return true;
+  if (!currentUserId) return false;
+  const creatorId = task.created_by?.id ?? task.created_by_id;
+  return creatorId === currentUserId && isWorkTaskAssignee(task, currentUserId);
+}
+
+/** ManageAttachments — creator or assignee only (unchanged by Q1=B). */
+export function canManageWorkTaskAttachments(
+  task: Pick<WorkTask, 'created_by_id' | 'created_by' | 'assignee_id' | 'assignee'>,
+  currentUserId: string | undefined | null
+): boolean {
+  if (!currentUserId) return false;
+  const creatorId = task.created_by?.id ?? task.created_by_id;
+  if (creatorId === currentUserId) return true;
+  return isWorkTaskAssignee(task, currentUserId);
 }
 
 export function isWorkTaskOverdue(task: Pick<WorkTask, 'due_at' | 'status'>): boolean {

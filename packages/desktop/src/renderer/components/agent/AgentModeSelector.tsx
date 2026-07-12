@@ -6,6 +6,7 @@
 
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 import type { AcpSessionConfigOption } from '@/common/types/platform/acpTypes';
 import { savePreferredMode } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 import { getAgentModes, supportsModeSwitch, type AgentModeOption } from '@/renderer/utils/model/agentModes';
@@ -141,7 +142,11 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   const defaultMode = modes[0]?.value ?? 'default';
   // Validate initialMode against available modes; fall back to backend's default
   // when the provided value doesn't match (e.g. opencode has 'build'/'plan', not 'default')
-  const validInitialMode = initialMode && modes.some((m) => m.value === initialMode) ? initialMode : defaultMode;
+  const normalizedInitialMode = normalizeAcpPermissionMode(backend, initialMode) || initialMode;
+  const validInitialMode =
+    normalizedInitialMode && modes.some((m) => m.value === normalizedInitialMode)
+      ? normalizedInitialMode
+      : defaultMode;
   const [current_mode, setCurrentMode] = useState<string>(validInitialMode);
   const [isLoading, setIsLoading] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -159,10 +164,11 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   // (e.g. opencode uses 'build' instead of 'default').
   useEffect(() => {
     if (initialMode !== undefined) {
-      const valid = modes.some((m) => m.value === initialMode) ? initialMode : defaultMode;
+      const normalized = normalizeAcpPermissionMode(backend, initialMode) || initialMode;
+      const valid = modes.some((m) => m.value === normalized) ? normalized : defaultMode;
       setCurrentMode(valid);
     }
-  }, [initialMode, modes, defaultMode]);
+  }, [backend, initialMode, modes, defaultMode]);
 
   // Sync mode from backend when mounting or switching conversation tabs
   useEffect(() => {
@@ -212,11 +218,12 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
       setIsLoading(true);
       try {
         await beforeRuntimeSync?.();
+        const normalizedMode = normalizeAcpPermissionMode(backend, mode) || mode;
         const confirmed = await ipcBridge.acpConversation.setMode.invoke({
           conversation_id,
-          mode,
+          mode: normalizedMode,
         });
-        const confirmedMode = confirmed.mode || mode;
+        const confirmedMode = confirmed.mode || normalizedMode;
 
         setCurrentMode(confirmedMode);
         onModeChanged?.(confirmedMode);

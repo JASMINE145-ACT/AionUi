@@ -7,24 +7,28 @@
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import {
-  isEmployeeProfileEmpty,
-  normalizeEmployeeProfile,
-  type EmployeeProfile,
-} from '@/common/config/employeeProfileShared';
+  normalizeEmployeeClientProfile,
+  type EmployeeClientProfile,
+  type EmployeeOrgContext,
+} from '@/common/config/employeeOrgContextShared';
+import { fetchEmployeeOrgContext } from '@/common/config/fetchEmployeeOrgContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Alert, Button, Form, Input, Message } from '@arco-design/web-react';
+import { Alert, Button, Descriptions, Form, Input, Message, Spin } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 
-async function syncEmployeeProfileToBackend(profile: EmployeeProfile | null): Promise<void> {
+async function syncEmployeeProfileToBackend(
+  org: EmployeeOrgContext | null,
+  client: EmployeeClientProfile | null
+): Promise<void> {
   if (!isElectronDesktop()) {
     return;
   }
   try {
-    await ipcBridge.ccbEmployeeProfileService.syncProfile.invoke({ profile });
+    await ipcBridge.ccbEmployeeProfileService.syncProfile.invoke({ org, client });
   } catch (error) {
     console.warn('[EmployeeProfile] syncProfile failed:', error);
   }
@@ -33,32 +37,55 @@ async function syncEmployeeProfileToBackend(profile: EmployeeProfile | null): Pr
 const EmployeeProfileModalContent: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [form] = Form.useForm<EmployeeProfile>();
+  const [form] = Form.useForm<EmployeeClientProfile>();
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [orgContext, setOrgContext] = useState<EmployeeOrgContext | null>(null);
+  const [orgLoading, setOrgLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setOrgLoading(true);
+      const org = await fetchEmployeeOrgContext();
+      if (!cancelled) {
+        setOrgContext(org);
+        setOrgLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.username]);
 
   useEffect(() => {
     void configService.whenReady().then(() => {
       const stored = configService.get('user.employeeProfile');
-      const initial: EmployeeProfile = stored ?? {};
-      if (!initial.displayName?.trim() && user?.username?.trim()) {
-        initial.displayName = user.username.trim();
-      }
+      const initial: EmployeeClientProfile = {
+        addressName: stored?.addressName,
+        email: stored?.email,
+        phone: stored?.phone,
+        notes: stored?.notes,
+      };
       form.setFieldsValue(initial);
       setLoaded(true);
     });
-  }, [form, user?.username]);
+  }, [form]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
+      const orgForSync = orgContext ?? (await fetchEmployeeOrgContext());
+      if (orgForSync && !orgContext) {
+        setOrgContext(orgForSync);
+      }
       const values = form.getFieldsValue();
-      const normalized = normalizeEmployeeProfile(values);
+      const normalized = normalizeEmployeeClientProfile(values);
       const payload = normalized
         ? { ...normalized, updatedAt: new Date().toISOString() }
         : null;
       await configService.set('user.employeeProfile', payload ?? undefined);
-      await syncEmployeeProfileToBackend(payload);
+      await syncEmployeeProfileToBackend(orgForSync, payload);
       Message.success(t('settings.employeeProfile.saveSuccess'));
     } catch (error) {
       console.error('[EmployeeProfile] save failed:', error);
@@ -66,11 +93,13 @@ const EmployeeProfileModalContent: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [form, t]);
+  }, [form, orgContext, t]);
 
   if (!loaded) {
     return null;
   }
+
+  const orgReadOnly = Boolean(orgContext);
 
   return (
     <div className='flex flex-col gap-16px'>
@@ -81,26 +110,44 @@ const EmployeeProfileModalContent: React.FC = () => {
 
       <Alert type='info' content={t('settings.employeeProfile.privacyNote')} />
       <Alert type='warning' content={t('settings.employeeProfile.newSessionNote')} />
+      {orgReadOnly ? (
+        <Alert type='info' content={t('settings.employeeProfile.orgReadOnlyNote')} />
+      ) : null}
+
+      {orgLoading ? (
+        <Spin />
+      ) : orgContext ? (
+        <Descriptions
+          column={1}
+          border
+          title={t('settings.employeeProfile.orgSectionTitle')}
+          data={[
+            { label: t('settings.employeeProfile.displayName'), value: orgContext.displayName },
+            { label: t('settings.employeeProfile.department'), value: orgContext.department ?? '—' },
+            { label: t('settings.employeeProfile.jobTitle'), value: orgContext.jobTitle ?? '—' },
+            { label: t('settings.employeeProfile.employeeId'), value: orgContext.username },
+            {
+              label: t('settings.employeeProfile.manager'),
+              value: orgContext.managerUsername ?? '—',
+            },
+            {
+              label: t('settings.employeeProfile.employmentStatus'),
+              value: orgContext.employmentStatus,
+            },
+          ]}
+        />
+      ) : (
+        <Alert type='warning' content={t('settings.employeeProfile.orgUnavailableNote')} />
+      )}
 
       <Form form={form} layout='vertical' autoComplete='off'>
-        <Form.Item label={t('settings.employeeProfile.displayName')} field='displayName'>
-          <Input placeholder={t('settings.employeeProfile.displayNamePlaceholder')} maxLength={80} />
-        </Form.Item>
+        <p className='text-14px font-500 text-t-primary m-0'>{t('settings.employeeProfile.clientSectionTitle')}</p>
         <Form.Item
           label={t('settings.employeeProfile.addressName')}
           field='addressName'
           extra={t('settings.employeeProfile.addressNameHint')}
         >
           <Input placeholder={t('settings.employeeProfile.addressNamePlaceholder')} maxLength={20} />
-        </Form.Item>
-        <Form.Item label={t('settings.employeeProfile.department')} field='department'>
-          <Input placeholder={t('settings.employeeProfile.departmentPlaceholder')} maxLength={80} />
-        </Form.Item>
-        <Form.Item label={t('settings.employeeProfile.jobTitle')} field='jobTitle'>
-          <Input placeholder={t('settings.employeeProfile.jobTitlePlaceholder')} maxLength={80} />
-        </Form.Item>
-        <Form.Item label={t('settings.employeeProfile.employeeId')} field='employeeId'>
-          <Input placeholder={t('settings.employeeProfile.employeeIdPlaceholder')} maxLength={40} />
         </Form.Item>
         <Form.Item label={t('settings.employeeProfile.email')} field='email'>
           <Input placeholder={t('settings.employeeProfile.emailPlaceholder')} maxLength={120} />
@@ -119,14 +166,10 @@ const EmployeeProfileModalContent: React.FC = () => {
       </Form>
 
       <div className='flex justify-end'>
-        <Button type='primary' loading={saving} onClick={() => void handleSave()}>
+        <Button type='primary' loading={saving} disabled={orgLoading} onClick={() => void handleSave()}>
           {t('settings.employeeProfile.save')}
         </Button>
       </div>
-
-      {isEmployeeProfileEmpty(form.getFieldsValue()) && (
-        <p className='text-12px text-t-tertiary m-0'>{t('settings.employeeProfile.emptyHint')}</p>
-      )}
     </div>
   );
 };

@@ -130,17 +130,20 @@ function attachClientHandlers(client, handlers) {
     }
   });
 
-  const dispatchText = async (frame) => {
-    if (!handlers.onTextFrame) return;
-    await handlers.onTextFrame(frame);
+  const dispatchInbound = async (frame) => {
+    if (!handlers.onInboundFrame) return;
+    await handlers.onInboundFrame(frame);
   };
 
-  client.on('message.text', dispatchText);
+  client.on('message.text', dispatchInbound);
+  client.on('message.file', dispatchInbound);
+  client.on('message.image', dispatchInbound);
+  client.on('message.mixed', dispatchInbound);
   client.on('message.voice', async (frame) => {
-    if (!handlers.onTextFrame) return;
+    if (!handlers.onInboundFrame) return;
     const content = frame?.body?.voice?.content;
     if (content) {
-      await handlers.onTextFrame({
+      await handlers.onInboundFrame({
         ...frame,
         body: {
           ...frame.body,
@@ -233,18 +236,61 @@ function disconnectClient(config) {
   setConnectionStatus('disconnected');
 }
 
-async function replyStreamForChat(chatId, content, finish) {
+async function replyStreamForChat(chatId, content, finish, streamId) {
   const client = getWsClient();
-  const ctx = require('./state').getReplyContext(chatId);
+  const resolvedStreamId = String(streamId || '').trim();
+  const ctx = resolvedStreamId
+    ? require('./state').getReplyContext(resolvedStreamId)
+    : null;
   if (!client || !ctx?.frame) {
-    throw new Error('ext-wecom-aibot: no active reply context for chat');
+    throw new Error(
+      resolvedStreamId
+        ? `ext-wecom-aibot: no active reply context for stream ${resolvedStreamId}`
+        : 'ext-wecom-aibot: no active reply context (missing streamId)'
+    );
   }
-  const streamId = ctx.streamId || generateReqId('stream');
-  await client.replyStream(ctx.frame, streamId, content || '', !!finish);
+  const replyStreamId = ctx.streamId || resolvedStreamId || generateReqId('stream');
+  await client.replyStream(ctx.frame, replyStreamId, content || '', !!finish);
   if (finish) {
-    require('./state').clearReplyContext(chatId);
+    require('./state').clearReplyContext(resolvedStreamId || replyStreamId);
   }
-  return streamId;
+  return replyStreamId;
+}
+
+/**
+ * Upload a local file and reply via replyMedia while reply context is still live.
+ * Does NOT clear reply context (WANd.WECOM.MEDIA.OUT.CTX.001).
+ */
+async function uploadAndReplyFileForChat(chatId, validatedFile, streamId) {
+  const fs = require('fs');
+  const client = getWsClient();
+  const resolvedStreamId = String(streamId || '').trim();
+  const ctx = resolvedStreamId
+    ? require('./state').getReplyContext(resolvedStreamId)
+    : null;
+  if (!client || !ctx?.frame) {
+    throw new Error(
+      resolvedStreamId
+        ? `ext-wecom-aibot: no active reply context for stream ${resolvedStreamId}`
+        : 'ext-wecom-aibot: no active reply context (missing streamId)'
+    );
+  }
+  if (!validatedFile?.ok || !validatedFile.absolutePath) {
+    throw new Error('ext-wecom-aibot: invalid outbound file');
+  }
+
+  const buffer = fs.readFileSync(validatedFile.absolutePath);
+  const upload = await client.uploadMedia(buffer, {
+    type: 'file',
+    filename: validatedFile.fileName,
+  });
+  const mediaId = upload?.media_id || upload?.mediaId;
+  if (!mediaId) {
+    throw new Error('ext-wecom-aibot: uploadMedia returned no media_id');
+  }
+
+  await client.replyMedia(ctx.frame, 'file', mediaId);
+  return { mediaId, fileName: validatedFile.fileName };
 }
 
 module.exports = {
@@ -259,5 +305,7 @@ module.exports = {
   attachClientHandlers,
   waitForAuthenticated,
   replyStreamForChat,
+  uploadAndReplyFileForChat,
+  getWsClient,
   generateReqId,
 };

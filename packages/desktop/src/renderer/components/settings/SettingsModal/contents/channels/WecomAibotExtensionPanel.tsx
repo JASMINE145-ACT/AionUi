@@ -7,6 +7,7 @@
 import type { IChannelPairingRequest, IChannelPluginStatus, IChannelUser } from '@/common/types/channel/channel';
 import { channel } from '@/common/adapter/ipcBridge';
 import { configService } from '@/common/config/configService';
+import { isWecomDevDocsLinkEnabled } from '@/common/config/ccbWandingRuntime';
 import { openExternalUrl } from '@/renderer/utils/platform';
 import {
   channelAgentOptionKey,
@@ -345,15 +346,17 @@ const WecomAibotExtensionPanel: React.FC<WecomAibotExtensionPanelProps> = ({
             defaultValue: 'v1: enterprise DM and group chat (mention @bot in groups).',
           })}
         </div>
-        <Button
-          type='text'
-          size='mini'
-          className='!px-0 mt-6px'
-          icon={<LinkOne theme='outline' size={14} />}
-          onClick={() => openExternalUrl(WECOM_DEV_DOCS_URL)}
-        >
-          {t('settings.channels.wecomAibot.openDocs', { defaultValue: 'WeCom developer docs' })}
-        </Button>
+        {isWecomDevDocsLinkEnabled() ? (
+          <Button
+            type='text'
+            size='mini'
+            className='!px-0 mt-6px'
+            icon={<LinkOne theme='outline' size={14} />}
+            onClick={() => openExternalUrl(WECOM_DEV_DOCS_URL)}
+          >
+            {t('settings.channels.wecomAibot.openDocs', { defaultValue: 'WeCom developer docs' })}
+          </Button>
+        ) : null}
       </div>
 
       <div className='space-y-6px'>

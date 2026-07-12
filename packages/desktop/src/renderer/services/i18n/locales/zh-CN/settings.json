@@ -288,7 +288,7 @@
   "employeeProfile": {
     "nav": "个人信息",
     "title": "个人信息",
-    "description": "填写你的姓名、部门、职位等基础信息。AI 会在新对话中自动识别当前用户身份。",
+    "description": "组织账号信息由公司服务器同步；你可补充日常称呼与备注。AI 会在新对话中自动识别当前用户身份。",
     "displayName": "姓名",
     "displayNamePlaceholder": "例如：张三",
     "addressName": "日常称呼",
@@ -311,7 +311,13 @@
     "saveFailed": "保存失败，请重试",
     "privacyNote": "这些信息会随对话发送给 AI 模型以提供个性化回复。请勿填写密码、密钥等敏感信息。",
     "newSessionNote": "修改仅对之后新开的对话生效；当前进行中的对话不会自动更新。",
-    "emptyHint": "留空则不会向 AI 注入用户身份信息。"
+    "emptyHint": "留空则不会向 AI 注入用户身份信息。",
+    "orgSectionTitle": "组织信息（只读）",
+    "clientSectionTitle": "个人补充（可编辑）",
+    "orgReadOnlyNote": "姓名、部门、职位等组织字段由公司账号体系维护，此处不可修改。",
+    "orgUnavailableNote": "暂时无法从组织服务器加载账号信息；仅个人补充会写入 AI 上下文。请确认已登录组织 SSO。",
+    "manager": "直属上级",
+    "employmentStatus": "在职状态"
   },
   "about": "关于",
   "advancedSettings": "高级设置",

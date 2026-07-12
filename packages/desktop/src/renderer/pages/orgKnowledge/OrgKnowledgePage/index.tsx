@@ -20,8 +20,10 @@ import {
   saveOrgKnowledgeDoc,
   useOrgKnowledgeDoc,
   useOrgKnowledgeHistory,
+  useOrgKnowledgeUserLabelLookup,
 } from '@renderer/pages/orgKnowledge/useOrgKnowledge';
 import type { OrgKnowledgeRevisionSummary } from '@renderer/pages/orgKnowledge/useOrgKnowledge';
+import { getOrgKnowledgeUpdaterLabel } from '@/common/types/orgKnowledge/orgKnowledgeDisplay';
 
 const { TextArea } = Input;
 
@@ -66,6 +68,7 @@ const OrgKnowledgePage: React.FC = () => {
   const { configured, orgStatus, orgUser, orgLogin } = useOrgAuth();
   const { data: doc, error: docError, isLoading: docLoading, mutate: mutateDoc } = useOrgKnowledgeDoc(WANDING_BUSINESS_KNOWLEDGE_SLUG);
   const { data: history, mutate: mutateHistory } = useOrgKnowledgeHistory(WANDING_BUSINESS_KNOWLEDGE_SLUG);
+  const userLabelById = useOrgKnowledgeUserLabelLookup(history, orgStatus === 'authenticated');
   const [editorContent, setEditorContent] = useState('');
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
@@ -298,7 +301,13 @@ const OrgKnowledgePage: React.FC = () => {
                         </Tag>
                       )}
                       <Typography.Text type='secondary' className='text-12px'>
-                        {t('orgKnowledge.updatedBy', { user: item.updated_by_id })}
+                        {t('orgKnowledge.updatedBy', {
+                          user: getOrgKnowledgeUpdaterLabel(
+                            item,
+                            t('orgKnowledge.unknownUser'),
+                            userLabelById
+                          ),
+                        })}
                       </Typography.Text>
                       <Typography.Text type='secondary' className='text-12px'>
                         {formatTs(item.created_at)}

@@ -5,19 +5,46 @@
  */
 
 import classNames from 'classnames';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { Button, Collapse, Empty, Message, Select, Spin, Tabs, Alert, Tag } from '@arco-design/web-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Button, Empty, Message, Select, Spin, Tabs, Alert, Tag } from '@arco-design/web-react';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import type { WorkTask, WorkTaskScope, WorkTaskStatus } from '@/common/types/workTasks/workTaskTypes';
 import {
   WORK_TASK_SCOPE_I18N_KEY,
   WORK_TASK_STATUS_I18N_KEY,
   WORK_TASK_STATUSES,
-  canTransitionWorkTaskStatus,
+  canAcceptWorkTask,
+  canCompleteWorkTask,
   isWorkTaskOverdue,
 } from '@/common/types/workTasks/workTaskTypes';
+import { useAuth } from '@renderer/hooks/context/AuthContext';
+import {
+  WORK_TASK_DASHBOARD_OVERDUE_LIMIT,
+  capWorkTasksForDashboard,
+  groupWorkTasksByAssignee,
+  listOverdueWorkTasks,
+} from '@/common/types/workTasks/workTaskDashboard';
+import {
+  WORK_TASKS_ASSIGNEE_UNASSIGNED,
+  applyOverdueClientFilter,
+  clearStatusAndOverdue,
+  emptyWorkTasksFilterState,
+  filterOverviewClientWorkTasks,
+  filterUnassignedWorkTasks,
+  hasWorkTasksFilterParams,
+  isWorkTasksFilterActive,
+  parseWorkTasksSearchParams,
+  resolveWorkTasksListMode,
+  serializeWorkTasksFilterState,
+  stripWorkTasksFilterParams,
+  toWorkTaskQueryParams,
+  withAssigneeFilter,
+  withOverdueFilter,
+  withStatusFilter,
+  type WorkTasksFilterState,
+} from '@/common/types/workTasks/workTaskFilterState';
 import {
   useWorkTaskQuery,
   useWorkTaskRole,
@@ -26,24 +53,120 @@ import {
 import WorkTaskStatusTag from '@renderer/pages/workTasks/components/WorkTaskStatusTag';
 import WorkTaskSourceTag from '@renderer/pages/workTasks/components/WorkTaskSourceTag';
 import CreateWorkTaskDialog from '@renderer/pages/workTasks/components/CreateWorkTaskDialog';
-
-const CollapseItem = Collapse.Item;
+import WorkTaskManagerDashboard from '@renderer/pages/workTasks/components/WorkTaskManagerDashboard';
 
 const WorkTasksPage: React.FC = () => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isManager } = useWorkTaskRole();
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const [scopeTab, setScopeTab] = useState<WorkTaskScope>('visible');
-  const [statusFilter, setStatusFilter] = useState<WorkTaskStatus | 'all'>('all');
   const [dialogVisible, setDialogVisible] = useState(false);
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<WorkTaskStatus | 'all'>('all');
 
-  const { tasks, loading, apiUnavailable, createTask, updateTask } = useWorkTasks({
+  const { state: filterState, didNormalize } = useMemo(
+    () => parseWorkTasksSearchParams(searchParams),
+    [searchParams]
+  );
+  const filterActive = isWorkTasksFilterActive(filterState);
+  const listMode = useMemo(() => resolveWorkTasksListMode(filterState), [filterState]);
+  const queryParams = useMemo(() => toWorkTaskQueryParams(filterState), [filterState]);
+
+  useLayoutEffect(() => {
+    if (!isManager) {
+      if (hasWorkTasksFilterParams(searchParams)) {
+        const stripped = stripWorkTasksFilterParams(searchParams);
+        setSearchParams(stripped, { replace: true });
+      }
+      return;
+    }
+    if (didNormalize) {
+      setSearchParams(serializeWorkTasksFilterState(filterState), { replace: true });
+    }
+  }, [isManager, searchParams, setSearchParams, didNormalize, filterState]);
+
+  const listSectionRef = React.useRef<HTMLDivElement>(null);
+
+  const pushFilter = useCallback(
+    (next: WorkTasksFilterState, opts?: { scrollToList?: boolean }) => {
+      setSearchParams(serializeWorkTasksFilterState(next), { replace: false });
+      if (opts?.scrollToList) {
+        requestAnimationFrame(() => {
+          listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    },
+    [setSearchParams]
+  );
+
+  const { tasks: listTasks, loading: listLoading, apiUnavailable, createTask, updateTask } = useWorkTasks({
     scope: scopeTab,
-    statusFilter: statusFilter === 'all' ? undefined : statusFilter,
+    statusFilter:
+      !isManager && employeeStatusFilter !== 'all'
+        ? employeeStatusFilter
+        : !filterActive && filterState.status
+          ? filterState.status
+          : undefined,
   });
-  const { query, loading: queryLoading } = useWorkTaskQuery(isManager);
+
+  const { query: overviewQuery, loading: overviewLoading } = useWorkTaskQuery(isManager);
+  const {
+    query: filteredQuery,
+    loading: filteredLoading,
+    error: filteredError,
+  } = useWorkTaskQuery(isManager && listMode.kind === 'query', queryParams ?? undefined);
+
+  const dashboard = useMemo(() => {
+    if (!isManager || !overviewQuery?.items) return null;
+    const slice = capWorkTasksForDashboard(overviewQuery.items);
+    const unassignedLabel = t('workTasks.overview.unassigned');
+    return {
+      ...slice,
+      groups: groupWorkTasksByAssignee(slice.items, unassignedLabel),
+      overdue: listOverdueWorkTasks(slice.items, WORK_TASK_DASHBOARD_OVERDUE_LIMIT),
+    };
+  }, [isManager, overviewQuery, t]);
+
+  const displayTasks = useMemo(() => {
+    if (!isManager || listMode.kind === 'list') return listTasks;
+    if (listMode.kind === 'query') {
+      const items = applyOverdueClientFilter(filteredQuery?.items ?? [], listMode.overdueClient);
+      return [...items].sort((a, b) => b.updated_at - a.updated_at);
+    }
+    if (listMode.kind === 'overview_client') {
+      return filterOverviewClientWorkTasks(overviewQuery?.items ?? [], {
+        status: listMode.status,
+        overdue: listMode.overdue,
+      }).sort((a, b) => b.updated_at - a.updated_at);
+    }
+    const source = overviewQuery?.items ?? [];
+    return filterUnassignedWorkTasks(source, {
+      status: listMode.status,
+      overdue: listMode.overdue,
+    }).sort((a, b) => b.updated_at - a.updated_at);
+  }, [isManager, listMode, listTasks, filteredQuery, overviewQuery]);
+
+  const listBusy =
+    listMode.kind === 'list'
+      ? listLoading
+      : listMode.kind === 'query'
+        ? filteredLoading
+        : overviewLoading;
+
+  const filteredCount = displayTasks.length;
+
+  const assigneeLabel = useMemo(() => {
+    if (!filterState.assignee) return null;
+    if (filterState.assignee === WORK_TASKS_ASSIGNEE_UNASSIGNED) {
+      return t('workTasks.overview.unassigned');
+    }
+    const group = dashboard?.groups.find((g) => g.assignee_id === filterState.assignee);
+    return group?.username ?? filterState.assignee;
+  }, [filterState.assignee, dashboard, t]);
 
   const scopeTabs = useMemo(() => {
     const scopes: WorkTaskScope[] = isManager
@@ -78,21 +201,21 @@ const WorkTasksPage: React.FC = () => {
   const handleQuickAccept = useCallback(
     async (task: WorkTask, event: { stopPropagation: () => void }) => {
       event.stopPropagation();
-      if (!canTransitionWorkTaskStatus(task.status, 'accepted')) return;
+      if (!canAcceptWorkTask(task, currentUserId)) return;
       await updateTask(task.id, { status: 'accepted' });
       Message.success(t('workTasks.message.updateSuccess'));
     },
-    [t, updateTask]
+    [currentUserId, t, updateTask]
   );
 
   const handleQuickComplete = useCallback(
     async (task: WorkTask, event: { stopPropagation: () => void }) => {
       event.stopPropagation();
-      if (!canTransitionWorkTaskStatus(task.status, 'completed')) return;
+      if (!canCompleteWorkTask(task, currentUserId, user?.work_task_role)) return;
       await updateTask(task.id, { status: 'completed' });
       Message.success(t('workTasks.message.updateSuccess'));
     },
-    [t, updateTask]
+    [currentUserId, t, updateTask, user?.work_task_role]
   );
 
   const formatDue = (dueAt?: number) => {
@@ -100,18 +223,73 @@ const WorkTasksPage: React.FC = () => {
     return new Date(dueAt).toLocaleString();
   };
 
+  const handleAssigneeClick = useCallback(
+    (assigneeId: string | null) => {
+      const key = assigneeId ?? WORK_TASKS_ASSIGNEE_UNASSIGNED;
+      if (filterState.assignee === key) {
+        pushFilter(withAssigneeFilter(filterState, null));
+        return;
+      }
+      pushFilter(withAssigneeFilter(filterState, key), { scrollToList: true });
+    },
+    [filterState, pushFilter]
+  );
+
+  const handleStatClick = useCallback(
+    (stat: 'total' | 'pending_accept' | 'accepted' | 'completed' | 'overdue') => {
+      if (stat === 'total') {
+        pushFilter(clearStatusAndOverdue(filterState));
+        return;
+      }
+      if (stat === 'overdue') {
+        pushFilter({
+          ...filterState,
+          status: null,
+          overdue: !filterState.overdue,
+        });
+        return;
+      }
+      const nextStatus = filterState.status === stat ? null : stat;
+      pushFilter(withStatusFilter({ ...filterState, overdue: false }, nextStatus));
+    },
+    [filterState, pushFilter]
+  );
+
+  const handleStatusSelect = useCallback(
+    (value: WorkTaskStatus | 'all') => {
+      if (!isManager) {
+        setEmployeeStatusFilter(value);
+        return;
+      }
+      pushFilter(withStatusFilter(filterState, value === 'all' ? null : value));
+    },
+    [filterState, pushFilter, isManager]
+  );
+
   return (
     <div
       className={classNames(
         'w-full min-h-full box-border overflow-y-auto',
-        isMobile ? 'px-16px py-14px' : 'px-12px py-24px md:px-40px md:py-32px'
+        isMobile
+          ? 'px-16px py-14px'
+          : filterActive
+            ? 'px-12px py-16px md:px-40px md:py-20px'
+            : 'px-12px py-24px md:px-40px md:py-32px'
       )}
     >
-      <div className={classNames('mx-auto flex w-full max-w-800px flex-col', isMobile ? 'gap-14px' : 'gap-16px')}>
+      <div
+        className={classNames(
+          'mx-auto flex w-full flex-col',
+          isManager ? 'max-w-960px' : 'max-w-800px',
+          filterActive ? 'gap-12px' : isMobile ? 'gap-14px' : 'gap-16px'
+        )}
+      >
         <div className='flex items-start justify-between gap-12px'>
           <div>
-            <h1 className='m-0 text-28px font-bold text-t-primary'>{t('workTasks.page.title')}</h1>
-            <p className='mt-8px mb-0 text-14px text-t-secondary'>{t('workTasks.page.description')}</p>
+            <h1 className={classNames('m-0 font-bold text-t-primary', isMobile ? 'text-22px' : 'text-24px')}>
+              {t('workTasks.page.title')}
+            </h1>
+            <p className='mt-4px mb-0 text-13px text-t-secondary'>{t('workTasks.page.description')}</p>
           </div>
           <Button type='primary' shape='round' onClick={() => setDialogVisible(true)} disabled={apiUnavailable}>
             {t('workTasks.page.newTask')}
@@ -126,55 +304,106 @@ const WorkTasksPage: React.FC = () => {
           />
         )}
 
-        {isManager && !apiUnavailable && (
-          <Collapse bordered={false} defaultActiveKey={[]}>
-            <CollapseItem header={t('workTasks.overview.title')} name='overview'>
-              {queryLoading ? (
-                <Spin />
-              ) : query ? (
-                <div className='flex flex-col gap-10px text-14px'>
-                  <div className='flex flex-wrap gap-8px'>
-                    <Tag>{t('workTasks.overview.total', { count: query.summary.total })}</Tag>
-                    <Tag color='orangered'>
-                      {t('workTasks.overview.pending', { count: query.summary.pending_accept })}
-                    </Tag>
-                    <Tag color='arcoblue'>{t('workTasks.overview.accepted', { count: query.summary.accepted })}</Tag>
-                    <Tag color='green'>{t('workTasks.overview.completed', { count: query.summary.completed })}</Tag>
-                    {query.summary.overdue_count > 0 && (
-                      <Tag color='red'>
-                        {t('workTasks.overview.overdue', { count: query.summary.overdue_count })}
-                      </Tag>
-                    )}
-                  </div>
-                  {query.summary.overdue_count > 0 && (
-                    <div className='flex flex-col gap-6px'>
-                      <span className='text-t-secondary'>{t('workTasks.overview.overdueList')}</span>
-                      {query.items
-                        .filter((task) => isWorkTaskOverdue(task))
-                        .slice(0, 5)
-                        .map((task) => (
-                          <button
-                            key={task.id}
-                            type='button'
-                            className='text-left text-13px text-t-primary hover:underline'
-                            onClick={() => navigate(`/tasks/${task.id}`)}
-                          >
-                            {task.title}
-                            {task.assignee?.username ? ` · ${task.assignee.username}` : ''}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </CollapseItem>
-          </Collapse>
+        {isManager && !apiUnavailable && (overviewLoading || overviewQuery) && (
+          <WorkTaskManagerDashboard
+            summary={
+              overviewQuery?.summary ?? {
+                total: 0,
+                pending_accept: 0,
+                accepted: 0,
+                completed: 0,
+                incomplete: 0,
+                deferred: 0,
+                overdue_count: 0,
+              }
+            }
+            groups={dashboard?.groups ?? []}
+            overdue={dashboard?.overdue ?? []}
+            truncated={dashboard?.truncated ?? false}
+            totalBeforeCap={dashboard?.totalBeforeCap ?? 0}
+            loading={overviewLoading}
+            isMobile={isMobile}
+            compact={filterActive}
+            selectedAssignee={filterState.assignee}
+            selectedStatus={filterState.status}
+            selectedOverdue={filterState.overdue}
+            onTaskClick={(taskId) => navigate(`/tasks/${taskId}`)}
+            onAssigneeClick={handleAssigneeClick}
+            onStatClick={handleStatClick}
+          />
         )}
 
+        {isManager && !apiUnavailable && !overviewLoading && !overviewQuery && (
+          <Alert type='warning' content={t('workTasks.overview.loadFailed')} />
+        )}
+
+        {isManager && filterActive && (
+          <div
+            className={classNames(
+              'flex flex-wrap items-center gap-8px rd-10px border border-[var(--color-border-2)]',
+              'bg-[var(--color-bg-2)] px-12px py-8px'
+            )}
+          >
+            {filterState.assignee && (
+              <Tag
+                closable
+                color='arcoblue'
+                onClose={() => pushFilter(withAssigneeFilter(filterState, null))}
+              >
+                {t('workTasks.filter.viewingAssignee', { name: assigneeLabel })}
+              </Tag>
+            )}
+            {filterState.status && (
+              <Tag
+                closable
+                color='orangered'
+                onClose={() => pushFilter(withStatusFilter(filterState, null))}
+              >
+                {t(WORK_TASK_STATUS_I18N_KEY[filterState.status])}
+              </Tag>
+            )}
+            {filterState.overdue && (
+              <Tag closable color='red' onClose={() => pushFilter(withOverdueFilter(filterState, false))}>
+                {t('workTasks.filter.overdueOnly')}
+              </Tag>
+            )}
+            <Button size='mini' type='text' onClick={() => pushFilter(emptyWorkTasksFilterState())}>
+              {t('workTasks.filter.clear')}
+            </Button>
+            <span className='ml-auto text-12px font-500 text-t-secondary tabular-nums'>
+              {t('workTasks.filter.resultCount', { count: filteredCount })}
+            </span>
+          </div>
+        )}
+
+        {isManager && listMode.kind === 'unassigned_client' && dashboard?.truncated && (
+          <Alert type='warning' content={t('workTasks.filter.unassignedPartial')} />
+        )}
+
+        {isManager && listMode.kind === 'query' && filteredError && (
+          <Alert
+            type='error'
+            content={t('workTasks.filter.queryFailed')}
+            action={
+              <Button size='mini' type='text' onClick={() => pushFilter(emptyWorkTasksFilterState())}>
+                {t('workTasks.filter.clear')}
+              </Button>
+            }
+          />
+        )}
+
+        <div
+          ref={listSectionRef}
+          className={classNames('flex flex-col gap-10px', filterActive && 'opacity-95')}
+        >
         <Tabs
           activeTab={scopeTab}
-          onChange={(key) => setScopeTab(key as WorkTaskScope)}
+          onChange={(key) => {
+            if (filterActive) return;
+            setScopeTab(key as WorkTaskScope);
+          }}
           type='rounded'
+          className={filterActive ? 'opacity-50 pointer-events-none' : undefined}
         >
           {scopeTabs.map((item) => (
             <Tabs.TabPane key={item.key} title={item.label} />
@@ -182,8 +411,8 @@ const WorkTasksPage: React.FC = () => {
         </Tabs>
 
         <Select
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value as WorkTaskStatus | 'all')}
+          value={isManager ? (filterState.status ?? 'all') : employeeStatusFilter}
+          onChange={(value) => handleStatusSelect(value as WorkTaskStatus | 'all')}
           style={{ width: 200 }}
           placeholder={t('workTasks.page.statusFilter')}
         >
@@ -195,25 +424,33 @@ const WorkTasksPage: React.FC = () => {
           ))}
         </Select>
 
-        {loading ? (
+        {listBusy ? (
           <div className='flex justify-center py-40px'>
             <Spin />
           </div>
-        ) : tasks.length === 0 ? (
-          <Empty description={t('workTasks.page.empty')} />
+        ) : displayTasks.length === 0 ? (
+          <Empty
+            description={
+              filterActive
+                ? filterState.assignee
+                  ? t('workTasks.filter.empty', { name: assigneeLabel ?? '' })
+                  : t('workTasks.filter.emptyGeneric')
+                : t('workTasks.page.empty')
+            }
+          />
         ) : (
           <div className='flex flex-col gap-10px'>
-            {tasks.map((task) => {
+            {displayTasks.map((task) => {
               const overdue = isWorkTaskOverdue(task);
-              const canAccept = canTransitionWorkTaskStatus(task.status, 'accepted');
-              const canComplete = canTransitionWorkTaskStatus(task.status, 'completed');
+              const canAccept = canAcceptWorkTask(task, currentUserId);
+              const canComplete = canCompleteWorkTask(task, currentUserId, user?.work_task_role);
               return (
                 <button
                   key={task.id}
                   type='button'
                   className={classNames(
-                    'w-full text-left rd-12px border px-16px py-14px hover:bg-fill-2 transition-colors cursor-pointer',
-                    overdue ? 'border-red-300 bg-red-50/30' : 'border-[var(--color-border-2)] bg-fill-1'
+                    'w-full text-left rd-10px border px-14px py-12px hover:bg-fill-2 transition-colors cursor-pointer',
+                    overdue ? 'border-red-300 bg-red-50/30' : 'border-[var(--color-border-2)] bg-[var(--color-bg-2)]'
                   )}
                   onClick={() => navigate(`/tasks/${task.id}`)}
                 >
@@ -262,6 +499,7 @@ const WorkTasksPage: React.FC = () => {
             })}
           </div>
         )}
+        </div>
       </div>
 
       <CreateWorkTaskDialog

@@ -9,6 +9,7 @@ export interface OrgKnowledgeDocSummary {
   title: string;
   version: number;
   updated_by_id: string;
+  updated_by?: OrgKnowledgePublicUser | null;
   created_at: number;
   updated_at: number;
 }
@@ -19,8 +20,15 @@ export interface OrgKnowledgeDoc {
   content: string;
   version: number;
   updated_by_id: string;
+  updated_by?: OrgKnowledgePublicUser | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface OrgKnowledgePublicUser {
+  id: string;
+  username: string;
+  work_task_role?: string;
 }
 
 export interface OrgKnowledgeRevisionSummary {
@@ -29,6 +37,7 @@ export interface OrgKnowledgeRevisionSummary {
   version: number;
   title: string;
   updated_by_id: string;
+  updated_by?: OrgKnowledgePublicUser | null;
   change_kind: string;
   revert_from_version?: number | null;
   created_at: number;

@@ -12,6 +12,7 @@ import {
 } from '@/common/utils/ccbPresetConversationExtra';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { buildAgentConversationParams } from '@/common/utils/buildAgentConversationParams';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
 import { emitter } from '@/renderer/utils/emitter';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
@@ -236,7 +237,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             preset_assistant_id,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
             selected_session_mcp_servers: selectedSessionMcpServersToSend,
-            session_mode: selectedMode,
+            session_mode: normalizeAcpPermissionMode('aionrs', selectedMode) || selectedMode,
             ...ccbPresetExtra,
           },
         });
@@ -314,7 +315,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         custom_workspace: isCustomWorkspace,
         is_preset,
         preset_agent_type: finalEffectiveAgentType,
-        session_mode: selectedMode,
+        session_mode: normalizeAcpPermissionMode(agentBackend, selectedMode) || selectedMode,
         current_model_id: selectedAcpModel || currentAcpCachedModelInfo?.current_model_id || undefined,
         assistant_locale: localeKey,
         assistant_conversation_overrides: assistantOverrides,

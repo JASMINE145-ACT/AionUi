@@ -5,7 +5,7 @@
  */
 
 import { DEFAULT_CODEX_MODELS } from '@/common/types/codex/codexModels';
-import { CODEX_MODE_NATIVE_FULL_ACCESS, normalizeCodexMode } from '@/common/types/codex/codexModes';
+import { normalizeCodexMode } from '@/common/types/codex/codexModes';
 import type { IProvider } from '@/common/config/storage';
 import { configService } from '@/common/config/configService';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
@@ -18,6 +18,7 @@ import {
   type AgentSource,
 } from '@/renderer/utils/model/agentTypes';
 import { getAgentModes } from '@/renderer/utils/model/agentModes';
+import { normalizeAcpPermissionMode } from '@/common/config/normalizeAcpPermissionMode';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
@@ -467,8 +468,11 @@ export const useGuidAgentSelection = ({
 
         if (cancelled) return;
 
-        // 1. Use preferredMode if valid
-        const normalizedPreferred = configKey === 'codex' ? normalizeCodexMode(preferred) : preferred;
+        // 1. Use preferredMode if valid (normalize legacy yolo aliases first)
+        const normalizedPreferred =
+          configKey === 'codex'
+            ? normalizeCodexMode(preferred)
+            : normalizeAcpPermissionMode(configKey, preferred) || preferred;
         if (normalizedPreferred) {
           const modes = getAgentModes(configKey);
           if (modes.some((m) => m.value === normalizedPreferred)) {
@@ -479,13 +483,7 @@ export const useGuidAgentSelection = ({
 
         // 2. Fallback: legacy yoloMode
         if (yoloMode) {
-          const yoloValues: Record<string, string> = {
-            claude: 'bypassPermissions',
-            gemini: 'yolo',
-            codex: CODEX_MODE_NATIVE_FULL_ACCESS,
-            qwen: 'yolo',
-          };
-          _setSelectedMode(yoloValues[configKey] || 'yolo');
+          _setSelectedMode(normalizeAcpPermissionMode(configKey, 'yolo') || 'yolo');
         }
       } catch {
         /* silent */
