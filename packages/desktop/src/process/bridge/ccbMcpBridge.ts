@@ -19,6 +19,7 @@ import { repairCcbMcpHealth, runCcbMcpHealthCheck } from '@/common/config/ccbMcp
 import {
   ensureCcbStartupReadiness,
   getCcbStartupReadinessStatus,
+  retryCcbStartupReadiness,
   startCcbStartupReadinessPipeline,
 } from '@/common/config/ccbStartupReadiness';
 import { isCcbMcpAuthorityActive } from '@/common/config/ccbWandingRuntimeNode';
@@ -81,6 +82,8 @@ export function initCcbMcpBridge(): void {
   ipcBridge.ccbMcpService.getStartupReadiness.provider(async () => getCcbStartupReadinessStatus());
 
   ipcBridge.ccbMcpService.ensureStartupReadiness.provider(async () => ensureCcbStartupReadiness());
+
+  ipcBridge.ccbMcpService.retryStartupReadiness.provider(async () => retryCcbStartupReadiness());
 
   if (isCcbMcpAuthorityActive()) {
     startCcbStartupReadinessPipeline();

@@ -46,6 +46,38 @@ export function useCcbStartupReadiness() {
     }
   }, [ccbAuthorityActive]);
 
+  const retry = useCallback(async () => {
+    if (!ccbAuthorityActive) return;
+    setLoading(true);
+    try {
+      setStatus({
+        phase: 'mcp_warm',
+        config_ok: true,
+        mcp_ok: false,
+        soft_ready: false,
+      });
+      const next = await ccbMcpService.retryStartupReadiness.invoke();
+      setStatus(next);
+    } catch (error) {
+      console.error('[useCcbStartupReadiness] retry failed:', error);
+      setStatus({
+        phase: 'ready',
+        config_ok: true,
+        mcp_ok: false,
+        soft_ready: true,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      try {
+        const latest = await ccbMcpService.getStartupReadiness.invoke();
+        setStatus(latest);
+      } catch {
+        // keep soft_ready error status so send is not stuck on mcp_warm
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [ccbAuthorityActive]);
+
   useEffect(() => {
     if (authorityLoading) return;
     void refresh();
@@ -70,6 +102,7 @@ export function useCcbStartupReadiness() {
     canSend,
     isPreparing,
     refresh,
+    retry,
     ccbAuthorityActive,
   };
 }

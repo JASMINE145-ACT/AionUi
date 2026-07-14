@@ -936,6 +936,7 @@ const GuidPage: React.FC = () => {
             <CcbStartupReadinessBanner
               status={startupReadiness.status}
               isPreparing={startupReadiness.isPreparing}
+              onRetry={startupReadiness.retry}
             />
           ) : null}
 

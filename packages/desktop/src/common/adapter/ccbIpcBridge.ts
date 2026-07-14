@@ -25,6 +25,7 @@ import type { MemoryFileContent, MemoryFileSummary, MemoryScope } from '../confi
 import type {
   PrecipitationDecisionInput,
   PrecipitationDecisionResult,
+  PrecipitationFunnelEventInput,
   PrecipitationProposal,
   PrecipitationScheduleInput,
   PrecipitationSummary,
@@ -67,6 +68,7 @@ export const ccbMcpService = {
   ),
   getStartupReadiness: bridge.buildProvider<CcbStartupReadinessStatus, void>('ccb.mcp.getStartupReadiness'),
   ensureStartupReadiness: bridge.buildProvider<CcbStartupReadinessStatus, void>('ccb.mcp.ensureStartupReadiness'),
+  retryStartupReadiness: bridge.buildProvider<CcbStartupReadinessStatus, void>('ccb.mcp.retryStartupReadiness'),
 };
 
 export const ccbAgentsService = {
@@ -139,6 +141,9 @@ export const ccbPrecipitationService = {
   listPending: bridge.buildProvider<PrecipitationProposal[], void>('ccb.precipitation.listPending'),
   schedule: bridge.buildProvider<{ ok: boolean; detail?: string }, PrecipitationScheduleInput>(
     'ccb.precipitation.schedule'
+  ),
+  recordEvent: bridge.buildProvider<{ ok: boolean; detail?: string }, PrecipitationFunnelEventInput>(
+    'ccb.precipitation.recordEvent'
   ),
   decide: bridge.buildProvider<PrecipitationDecisionResult, PrecipitationDecisionInput>(
     'ccb.precipitation.decide'

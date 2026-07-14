@@ -15,6 +15,11 @@ import type {
   CcbStartupReadinessPhase,
   CcbStartupReadinessStatus,
 } from './ccbStartupReadinessShared';
+import {
+  isCcbStartupCoreMcpOk,
+  mergeWarmResultsOnTimeout,
+  parseWarmWandingMcpStdout,
+} from './ccbStartupReadinessShared';
 import { resolveCcbClaudeConfigDir } from './ccbWandingRuntime';
 import {
   isCcbMcpAuthorityActive,
@@ -27,10 +32,18 @@ export type {
   CcbStartupReadinessPhase,
   CcbStartupReadinessStatus,
 } from './ccbStartupReadinessShared';
-export { isCcbStartupSendAllowed } from './ccbStartupReadinessShared';
+export {
+  isCcbStartupCoreMcpOk,
+  isCcbStartupSendAllowed,
+  isCcbStartupSoftReadyWarning,
+  mergeWarmResultsOnTimeout,
+  parseWarmWandingMcpStdout,
+} from './ccbStartupReadinessShared';
 
-const MCP_WARM_TIMEOUT_MS = 120_000;
-const DEFAULT_WARM_SERVERS = ['quotation', 'accurate'] as const;
+/** Quotation alone — gates soft_ready (Guid send path). */
+const CORE_WARM_TIMEOUT_MS = 90_000;
+/** Accurate is best-effort; must not force soft_ready if quotation already OK. */
+const BEST_EFFORT_WARM_TIMEOUT_MS = 60_000;
 
 let status: CcbStartupReadinessStatus = {
   phase: 'idle',
@@ -53,7 +66,7 @@ function spawnWarmScript(
   servers: readonly string[],
   options: { timeoutMs?: number } = {}
 ): Promise<CcbStartupMcpWarmResult[]> {
-  const timeoutMs = options.timeoutMs ?? MCP_WARM_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? CORE_WARM_TIMEOUT_MS;
   const installerRoot = resolveCcbInstallerRoot();
   const installDir = resolveCcbWandingInstallDir();
   const configDir = resolveCcbClaudeConfigDir();
@@ -104,14 +117,15 @@ function spawnWarmScript(
     };
 
     const timer = setTimeout(() => {
-      finish([
-        {
-          server: 'timeout',
-          ok: false,
-          ms: timeoutMs,
-          detail: 'MCP warm exceeded 120s',
-        },
-      ]);
+      // Keep PASS/FAIL already printed — do not wipe with a single timeout row.
+      finish(
+        mergeWarmResultsOnTimeout(
+          stdout,
+          servers,
+          timeoutMs,
+          `MCP warm exceeded ${Math.round(timeoutMs / 1000)}s`
+        )
+      );
     }, timeoutMs);
 
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -122,25 +136,18 @@ function spawnWarmScript(
     });
 
     child.on('close', (code) => {
-      const results: CcbStartupMcpWarmResult[] = [];
-      for (const line of stdout.split(/\r?\n/)) {
-        const match = line.match(/^\[warm-wanding-mcp\] (PASS|FAIL) (\S+) (\d+)ms (.*)$/);
-        if (match) {
-          results.push({
-            server: match[2],
-            ok: match[1] === 'PASS',
-            ms: Number(match[3]),
-            detail: match[4],
-          });
-        }
-      }
+      if (settled) return;
+      const results = parseWarmWandingMcpStdout(stdout);
       if (results.length === 0) {
-        results.push({
-          server: 'warm-script',
-          ok: code === 0,
-          ms: Date.now() - started,
-          detail: stderr.trim() || stdout.trim() || `exit ${code ?? 'unknown'}`,
-        });
+        finish([
+          {
+            server: 'warm-script',
+            ok: code === 0,
+            ms: Date.now() - started,
+            detail: stderr.trim() || stdout.trim() || `exit ${code ?? 'unknown'}`,
+          },
+        ]);
+        return;
       }
       finish(results);
     });
@@ -193,16 +200,46 @@ async function runPipeline(): Promise<CcbStartupReadinessStatus> {
       config_ok: true,
     });
 
-    const mcpResults = await spawnWarmScript(DEFAULT_WARM_SERVERS, { timeoutMs: MCP_WARM_TIMEOUT_MS });
-    const mcpOk = mcpResults.every((r) => r.ok);
-    const timedOut = mcpResults.some((r) => r.server === 'timeout');
+    // Quotation first (gates soft_ready). Resolve pipeline as soon as core is OK so
+    // ensureStartupReadiness / initial ACP send are not held by accurate best-effort warm.
+    const quotationResults = await spawnWarmScript(['quotation'], { timeoutMs: CORE_WARM_TIMEOUT_MS });
+    const coreOk = isCcbStartupCoreMcpOk(quotationResults);
+    const coreFailed = quotationResults.filter((r) => !r.ok);
 
+    if (coreOk) {
+      const coreReady: CcbStartupReadinessStatus = {
+        phase: 'ready',
+        config_ok: true,
+        mcp_ok: true,
+        soft_ready: false,
+        error: undefined,
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+        mcp_results: quotationResults,
+      };
+      setStatus(coreReady);
+      // Accurate continues in background; update mcp_results when done (no soft_ready).
+      void spawnWarmScript(['accurate'], { timeoutMs: BEST_EFFORT_WARM_TIMEOUT_MS }).then((accurateResults) => {
+        const latest = getCcbStartupReadinessStatus();
+        if (latest.phase !== 'ready' || !latest.mcp_ok) return;
+        setStatus({
+          ...latest,
+          finished_at: new Date().toISOString(),
+          mcp_results: [...quotationResults, ...accurateResults],
+        });
+      });
+      return coreReady;
+    }
+
+    // Core failed — still try accurate (best-effort telemetry) then soft_ready.
+    const accurateResults = await spawnWarmScript(['accurate'], { timeoutMs: BEST_EFFORT_WARM_TIMEOUT_MS });
+    const mcpResults = [...quotationResults, ...accurateResults];
     const finished: CcbStartupReadinessStatus = {
       phase: 'ready',
       config_ok: true,
-      mcp_ok: mcpOk,
-      soft_ready: timedOut || !mcpOk,
-      error: mcpOk ? undefined : mcpResults.map((r) => `${r.server}: ${r.detail}`).join('; '),
+      mcp_ok: false,
+      soft_ready: true,
+      error: coreFailed.map((r) => `${r.server}: ${r.detail}`).join('; ') || 'quotation warm failed',
       started_at: startedAt,
       finished_at: new Date().toISOString(),
       mcp_results: mcpResults,
@@ -248,4 +285,14 @@ export function resetCcbStartupReadinessForTests(): void {
     soft_ready: false,
   };
   pipelinePromise = null;
+}
+
+/** Clear cached ready/error so ensure can re-run (Guid banner retry). */
+export function resetCcbStartupReadinessForRetry(): void {
+  resetCcbStartupReadinessForTests();
+}
+
+export async function retryCcbStartupReadiness(): Promise<CcbStartupReadinessStatus> {
+  resetCcbStartupReadinessForRetry();
+  return ensureCcbStartupReadiness();
 }
