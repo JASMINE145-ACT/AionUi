@@ -1,34 +1,30 @@
-import { Badge } from '@arco-design/web-react';
-import { IconCheckCircle, IconDown, IconRight } from '@arco-design/web-react/icon';
-import React, { useState } from 'react';
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { IMessagePlan } from '@/common/chat/chatLib';
+import { Down, Right } from '@icon-park/react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import PlanChecklist from './PlanChecklist';
 
 const MessagePlan: React.FC<{ message: IMessagePlan }> = ({ message }) => {
-  const [showMore, setShowMore] = useState(true);
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(true);
+
   return (
-    <div>
-      <div className='flex items-center gap-10px color-#86909C cursor-pointer' onClick={() => setShowMore(!showMore)}>
-        <Badge status='default' text='To do list' className={'![&_span.arco-badge-status-text]:color-#86909C'}></Badge>
-        {showMore ? <IconDown /> : <IconRight />}
-      </div>
-      {showMore && (
-        <div className='p-l-20px flex flex-col gap-8px pt-8px'>
-          {message.content.entries.map((item, index) => {
-            return (
-              <div className='flex flex-row items-center color-#86909C gap-8px'>
-                {item.status === 'completed' ? (
-                  <IconCheckCircle fontSize={22} strokeWidth={4} className='flex color-#00B42A' />
-                ) : (
-                  <div className='size-22px flex items-center justify-center'>
-                    <div className='size-14px  rd-10px b-2px b-solid b-[rgba(201,205,212,1)]'></div>
-                  </div>
-                )}
-                <span>{item.content} </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div data-testid='message-plan'>
+      <button
+        type='button'
+        className='flex items-center gap-10px text-t-secondary cursor-pointer border-0 bg-transparent p-0'
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span className='text-13px'>{t('conversation.plan.messageTitle')}</span>
+        {expanded ? <Down theme='outline' size='14' /> : <Right theme='outline' size='14' />}
+      </button>
+      {expanded ? <PlanChecklist message={message} className='mt-8px' /> : null}
     </div>
   );
 };

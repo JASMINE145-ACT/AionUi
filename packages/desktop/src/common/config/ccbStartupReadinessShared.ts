@@ -29,6 +29,14 @@ export type CcbStartupReadinessStatus = {
 /** Core warm set that gates soft_ready scare banner (accurate is best-effort). */
 export const CCB_STARTUP_CORE_WARM_SERVERS = ['quotation'] as const;
 
+/** MCP child work budget; matches warm-wanding-mcp.mjs. */
+export const CCB_STARTUP_CORE_WARM_WORK_BUDGET_MS = 120_000;
+/** Parent-side grace for process scheduling and stdout drain after child work completes. */
+export const CCB_STARTUP_CORE_WARM_WRAPPER_GRACE_MS = 10_000;
+/** Electron must outlive the child work budget to avoid a parent/child timeout race. */
+export const CCB_STARTUP_CORE_WARM_WRAPPER_DEADLINE_MS =
+  CCB_STARTUP_CORE_WARM_WORK_BUDGET_MS + CCB_STARTUP_CORE_WARM_WRAPPER_GRACE_MS;
+
 const WARM_LINE_RE = /^\[warm-wanding-mcp\] (PASS|FAIL) (\S+) (\d+)ms (.*)$/;
 
 /** Parse warm-wanding-mcp.mjs stdout lines into per-server results. */

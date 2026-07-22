@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbAgentsService } from '@/common/adapter/ipcBridge';
 import { CCB_DEFAULT_SESSION_AGENT_ID } from '@/common/config/ccbAgentCatalog';
 import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
@@ -68,7 +69,9 @@ const GuidPage: React.FC = () => {
   const localeKey = resolveLocaleKey(i18n.language);
   const { active: ccbAuthorityActive } = useCcbAuthorityActive();
   const startupReadiness = useCcbStartupReadiness();
-  const personalMemoryLearning = useCcbPersonalMemoryLearning(startupReadiness.ccbAuthorityActive);
+  const personalMemoryLearning = useCcbPersonalMemoryLearning(
+    startupReadiness.ccbAuthorityActive && !isWebUiBrowserMode()
+  );
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Open external link
@@ -183,7 +186,9 @@ const GuidPage: React.FC = () => {
   );
 
   const { data: sessionCcbAgent } = useSWR(
-    sessionCcbAgentId && ccbAuthorityActive ? `guid.session.ccbAgent.${sessionCcbAgentId}` : null,
+    sessionCcbAgentId && ccbAuthorityActive && !isWebUiBrowserMode()
+      ? `guid.session.ccbAgent.${sessionCcbAgentId}`
+      : null,
     async () => ccbAgentsService.getAgent.invoke({ id: sessionCcbAgentId! })
   );
 

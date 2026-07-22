@@ -80,6 +80,7 @@ configService.initialize().catch((err) => {
 // i18n
 import './services/i18n';
 import { registerPwa } from './services/registerPwa';
+import { hydrateWebUiRuntimeConfig } from '@/common/webui/hydrateWebUiRuntimeConfig';
 
 import { mutate as swrMutate } from 'swr';
 import { ipcBridge } from '@/common';
@@ -355,23 +356,27 @@ const BackendStartupFailureDialog: React.FC<{ failure: BackendStartupFailureInfo
 
 void registerPwa();
 
-const root = createRoot(document.getElementById('root')!);
-const backendStartupFailure = window.__backendStartupFailure;
-const shouldShowBackendStartupFailureDialog =
-  backendStartupFailure?.reason === 'backend_incompatible_runtime' ||
-  backendStartupFailure?.reason === 'backend_incomplete_installation' ||
-  backendStartupFailure?.reason === 'backend_package_architecture_mismatch' ||
-  backendStartupFailure?.reason === 'backend_startup_failed';
-if (backendStartupFailure && shouldShowBackendStartupFailureDialog) {
-  root.render(
-    <Config>
-      <BackendStartupFailureDialog failure={backendStartupFailure} />
-    </Config>
-  );
-} else {
-  root.render(
-    <AppProviders>
-      <App />
-    </AppProviders>
-  );
-}
+void (async () => {
+  await hydrateWebUiRuntimeConfig();
+
+  const root = createRoot(document.getElementById('root')!);
+  const backendStartupFailure = window.__backendStartupFailure;
+  const shouldShowBackendStartupFailureDialog =
+    backendStartupFailure?.reason === 'backend_incompatible_runtime' ||
+    backendStartupFailure?.reason === 'backend_incomplete_installation' ||
+    backendStartupFailure?.reason === 'backend_package_architecture_mismatch' ||
+    backendStartupFailure?.reason === 'backend_startup_failed';
+  if (backendStartupFailure && shouldShowBackendStartupFailureDialog) {
+    root.render(
+      <Config>
+        <BackendStartupFailureDialog failure={backendStartupFailure} />
+      </Config>
+    );
+  } else {
+    root.render(
+      <AppProviders>
+        <App />
+      </AppProviders>
+    );
+  }
+})();

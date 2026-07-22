@@ -96,6 +96,11 @@ export const OrgAuthProvider: React.FC<React.PropsWithChildren> = ({ children })
     if (user) {
       setOrgUser(user);
       setOrgStatus('authenticated');
+      // Keep MCP disk token aligned with the live bearer (prevent UI/disk drift).
+      const bearer = getOrgBearerToken();
+      if (bearer) {
+        void writeOrgTokenToMain(bearer);
+      }
     } else {
       if (invalidToken) {
         clearOrgSessionToken();

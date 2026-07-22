@@ -5,6 +5,7 @@
  */
 
 import { ccbMcpService } from '@/common/adapter/ipcBridge';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import type { CcbStartupReadinessStatus } from '@/common/config/ccbStartupReadinessShared';
 import { isCcbStartupSendAllowed } from '@/common/config/ccbStartupReadinessShared';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
@@ -15,6 +16,13 @@ const IDLE_STATUS: CcbStartupReadinessStatus = {
   config_ok: false,
   mcp_ok: false,
   soft_ready: false,
+};
+
+const WEBUI_READY_STATUS: CcbStartupReadinessStatus = {
+  phase: 'ready',
+  config_ok: true,
+  mcp_ok: true,
+  soft_ready: true,
 };
 
 export function useCcbStartupReadiness() {
@@ -30,6 +38,11 @@ export function useCcbStartupReadiness() {
         mcp_ok: true,
         soft_ready: false,
       });
+      return;
+    }
+    // WebUI: MCP readiness IPC never resolves; allow send once authority HTTP is active.
+    if (isWebUiBrowserMode()) {
+      setStatus(WEBUI_READY_STATUS);
       return;
     }
     setLoading(true);
@@ -48,6 +61,10 @@ export function useCcbStartupReadiness() {
 
   const retry = useCallback(async () => {
     if (!ccbAuthorityActive) return;
+    if (isWebUiBrowserMode()) {
+      setStatus(WEBUI_READY_STATUS);
+      return;
+    }
     setLoading(true);
     try {
       setStatus({
@@ -85,6 +102,7 @@ export function useCcbStartupReadiness() {
 
   useEffect(() => {
     if (!ccbAuthorityActive) return;
+    if (isWebUiBrowserMode()) return;
     if (status.phase === 'ready' || status.phase === 'error') return;
     const timer = window.setInterval(() => {
       void ccbMcpService.getStartupReadiness.invoke().then(setStatus);

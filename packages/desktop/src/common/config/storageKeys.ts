@@ -25,6 +25,12 @@ export const STORAGE_KEYS = {
 
   /** Language preference / 语言偏好 */
   LANGUAGE: 'aionui_language',
+
+  /**
+   * Guid zero-card mode — `'1'`/`'true'` hide Guid shortcuts; `'0'`/`'false'` show cards.
+   * Unset ⇒ **on** (G2). Team/Settings catalog unaffected.
+   */
+  CCB_GUID_ZERO_CARD: 'ccb_guid_zero_card',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

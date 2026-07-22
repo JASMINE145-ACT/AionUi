@@ -21,6 +21,8 @@ export interface AuthUser {
   id: string;
   username: string;
   work_task_role?: 'manager' | 'employee';
+  /** Org system admin — from org `/api/auth/user` (`users.is_admin`). */
+  is_admin?: boolean;
 }
 
 interface LoginParams {

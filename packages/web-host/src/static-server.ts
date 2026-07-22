@@ -11,15 +11,18 @@
  */
 
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import https from 'node:https';
 import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
 import serveHandler from 'serve-handler';
+import type { WebUiSurface } from './types.js';
 
 export type StaticServerOptions = {
   staticDir: string;
   backendPort: number;
   port?: number;
   allowRemote?: boolean;
+  webUiSurface?: WebUiSurface;
 };
 
 export type StaticServerHandle = {
@@ -32,6 +35,96 @@ export type StaticServerHandle = {
 };
 
 const DEFAULT_PORT = 25808;
+const WEBUI_ORG_PROXY_PREFIX = '/api/webui/org';
+
+function getRequestPathname(url: string): string {
+  const q = url.indexOf('?');
+  return q >= 0 ? url.slice(0, q) : url;
+}
+
+function writeJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+function forwardToOrgServer(req: IncomingMessage, res: ServerResponse, orgServerUrl: string): void {
+  const base = orgServerUrl.trim().replace(/\/$/, '');
+  if (!base) {
+    writeJson(res, 503, { error: 'ORG_SERVER_URL_NOT_CONFIGURED' });
+    return;
+  }
+
+  const reqUrl = req.url ?? '/';
+  const orgPath = reqUrl.startsWith(WEBUI_ORG_PROXY_PREFIX)
+    ? reqUrl.slice(WEBUI_ORG_PROXY_PREFIX.length) || '/'
+    : reqUrl;
+
+  let target: URL;
+  try {
+    target = new URL(orgPath, `${base}/`);
+  } catch {
+    writeJson(res, 502, { error: 'ORG_SERVER_URL_INVALID' });
+    return;
+  }
+
+  const isHttps = target.protocol === 'https:';
+  const client = isHttps ? https : http;
+  const options: http.RequestOptions = {
+    hostname: target.hostname,
+    port: target.port || (isHttps ? 443 : 80),
+    path: `${target.pathname}${target.search}`,
+    method: req.method,
+    headers: { ...req.headers, host: target.host },
+  };
+
+  const proxy = client.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  proxy.on('error', () => {
+    if (!res.headersSent) {
+      writeJson(res, 502, { error: 'ORG_SERVER_UNREACHABLE' });
+    } else {
+      res.destroy();
+    }
+  });
+  req.pipe(proxy);
+}
+
+async function handleWebUiApiRoute(
+  req: IncomingMessage,
+  res: ServerResponse,
+  surface: WebUiSurface
+): Promise<boolean> {
+  const url = req.url ?? '';
+  const pathname = getRequestPathname(url);
+
+  if (pathname === '/api/webui/runtime-config' && req.method === 'GET') {
+    const config = await surface.getRuntimeConfig();
+    writeJson(res, 200, config);
+    return true;
+  }
+
+  if (pathname === '/api/webui/ccb/authority' && req.method === 'GET') {
+    const active = await surface.isCcbAuthorityActive();
+    writeJson(res, 200, { active: active === true });
+    return true;
+  }
+
+  if (pathname === '/api/webui/ccb/agents' && req.method === 'GET') {
+    const agents = await surface.listCcbAgents();
+    writeJson(res, 200, { agents });
+    return true;
+  }
+
+  if (url.startsWith(WEBUI_ORG_PROXY_PREFIX)) {
+    const config = await surface.getRuntimeConfig();
+    forwardToOrgServer(req, res, config.orgServerUrl);
+    return true;
+  }
+
+  return false;
+}
 
 function getLanIP(): string | null {
   const nets = networkInterfaces();
@@ -136,6 +229,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       if (!req.url || !req.method) {
         res.writeHead(400).end();
         return;
+      }
+
+      // WebUI business routes — handled locally before backend proxy.
+      if (opts.webUiSurface && req.url?.startsWith('/api/webui/')) {
+        const handled = await handleWebUiApiRoute(req, res, opts.webUiSurface);
+        if (handled) return;
       }
 
       // /api/* — reverse proxy to backend (includes /api/auth/*).

@@ -175,12 +175,18 @@ export function sortCcbAgents(agents: CcbAgentRecord[]): CcbAgentRecord[] {
 export type GuidCatalogFilterOptions = {
   /** When false, agents with requires_price_admin are hidden */
   isPriceAdmin?: boolean;
+  /**
+   * WANd.GUID.SINGLE_ENTRY.001 — when true, Guid shortcut cards are empty.
+   * Default false; enable via Guid surface (`isGuidZeroCardEnabled`), not shared catalog.
+   */
+  zeroCard?: boolean;
 };
 
 export function filterGuidCatalogAgents(
   agents: CcbAgentRecord[],
   options?: GuidCatalogFilterOptions,
 ): CcbAgentRecord[] {
+  if (options?.zeroCard === true) return [];
   const isPriceAdmin = options?.isPriceAdmin === true;
   return agents.filter((agent) => {
     if (agent.enabled === false) return false;

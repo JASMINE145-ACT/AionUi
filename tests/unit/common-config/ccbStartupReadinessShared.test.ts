@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CCB_STARTUP_CORE_WARM_WORK_BUDGET_MS,
+  CCB_STARTUP_CORE_WARM_WRAPPER_DEADLINE_MS,
+  CCB_STARTUP_CORE_WARM_WRAPPER_GRACE_MS,
   isCcbStartupCoreMcpOk,
   isCcbStartupSendAllowed,
   isCcbStartupSoftReadyWarning,
@@ -9,6 +12,15 @@ import {
 } from '@/common/config/ccbStartupReadinessShared';
 
 describe('ccbStartupReadinessShared', () => {
+  it('keeps the core wrapper deadline beyond the warm-script work budget', () => {
+    expect(CCB_STARTUP_CORE_WARM_WORK_BUDGET_MS).toBe(120_000);
+    expect(CCB_STARTUP_CORE_WARM_WRAPPER_GRACE_MS).toBe(10_000);
+    expect(CCB_STARTUP_CORE_WARM_WRAPPER_DEADLINE_MS).toBe(
+      CCB_STARTUP_CORE_WARM_WORK_BUDGET_MS + CCB_STARTUP_CORE_WARM_WRAPPER_GRACE_MS
+    );
+    expect(CCB_STARTUP_CORE_WARM_WRAPPER_DEADLINE_MS).toBe(130_000);
+  });
+
   it('allows send when phase is ready', () => {
     const status: CcbStartupReadinessStatus = {
       phase: 'ready',

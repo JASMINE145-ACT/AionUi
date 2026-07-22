@@ -29,6 +29,7 @@ import orgDatabase from './orgDatabase.json';
 import priceLibrary from './priceLibrary.json';
 import workTasks from './workTasks.json';
 import teamMembers from './teamMembers.json';
+import orgUsers from './orgUsers.json';
 
 export default {
   common,
@@ -57,4 +58,5 @@ export default {
   priceLibrary,
   workTasks,
   teamMembers,
+  orgUsers,
 };

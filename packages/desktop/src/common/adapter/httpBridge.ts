@@ -48,7 +48,7 @@ function getBackendPort(): number {
  * injected. Use same-origin URLs; web-host's static-server handles the reverse
  * proxy / WS upgrade to the backend.
  */
-function isWebUiBrowserMode(): boolean {
+export function isWebUiBrowserMode(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined' && !(window as Window).__backendPort;
 }
 

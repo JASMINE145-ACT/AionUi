@@ -2,7 +2,8 @@ import React, { Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
+import { DESKTOP_PET_ENABLED, TEAM_MODE_ENABLED } from '@/common/config/constants';
+import { RETIRED_SETTINGS_REDIRECTS } from '@/common/config/settingsNavContract';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -23,9 +24,9 @@ const OrgKnowledgePage = React.lazy(() => import('@renderer/pages/orgKnowledge/O
 const MemoryPage = React.lazy(() => import('@renderer/pages/memory/MemoryPage'));
 const PriceLibraryPage = React.lazy(() => import('@renderer/pages/priceLibrary/PriceLibraryPage'));
 const SuppliersPage = React.lazy(() => import('@renderer/pages/suppliers/SuppliersPage'));
+const OrgSettingsPage = React.lazy(() => import('@renderer/pages/settings/OrgSettingsPage'));
 const WorkTasksPage = React.lazy(() => import('@renderer/pages/workTasks/WorkTasksPage'));
 const WorkTaskDetailPage = React.lazy(() => import('@renderer/pages/workTasks/WorkTasksPage/WorkTaskDetailPage'));
-const TeamMembersPage = React.lazy(() => import('@renderer/pages/settings/TeamMembersPage'));
 const TeamIndex = React.lazy(() => import('@renderer/pages/team'));
 
 const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentType>) => (
@@ -76,9 +77,18 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
           <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/team-members' element={withRouteFallback(TeamMembersPage)} />
-          <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
+          <Route
+            path='/settings/team-members'
+            element={<Navigate to={RETIRED_SETTINGS_REDIRECTS['team-members']} replace />}
+          />
+          <Route
+            path='/settings/pet'
+            element={
+              DESKTOP_PET_ENABLED ? withRouteFallback(PetSettings) : <Navigate to='/settings/appearance' replace />
+            }
+          />
           <Route path='/settings/profile' element={withRouteFallback(EmployeeProfileSettings)} />
+          <Route path='/settings/org' element={withRouteFallback(OrgSettingsPage)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
           <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
@@ -90,6 +100,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/memory' element={withRouteFallback(MemoryPage)} />
           <Route path='/price-library' element={withRouteFallback(PriceLibraryPage)} />
           <Route path='/suppliers' element={withRouteFallback(SuppliersPage)} />
+          <Route path='/org-users' element={<Navigate to='/settings/org' replace />} />
           <Route path='/tasks' element={withRouteFallback(WorkTasksPage)} />
           <Route path='/tasks/:task_id' element={withRouteFallback(WorkTaskDetailPage)} />
         </Route>

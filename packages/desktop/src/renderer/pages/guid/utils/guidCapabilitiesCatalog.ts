@@ -5,7 +5,9 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbModelService, ccbMcpService } from '@/common/adapter/ipcBridge';
+import { fetchWebUiCcbAuthority } from '@/common/webui/ccbWebApi';
 import { ccbMcpIdFromName } from '@/common/config/ccbAssistantCatalog';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import type { CcbSkillInfo } from '@/common/config/ccbSkillsShared';
@@ -77,8 +79,11 @@ export async function loadAionUiGuidMcpCatalog(): Promise<IMcpServer[]> {
 
 /** Guid action-row catalog — CCB skills/MCP when authority active, else upstream aioncore corpus. */
 export async function loadGuidCapabilitiesCatalog(): Promise<GuidCapabilitiesCatalog> {
-  const ccbAuthorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
-  if (ccbAuthorityActive) {
+  const ccbAuthorityActive = isWebUiBrowserMode()
+    ? await fetchWebUiCcbAuthority().catch(() => false)
+    : await ccbModelService.isAuthorityActive.invoke().catch(() => false);
+  // WebUI: CCB skills/MCP IPC unavailable — use upstream aioncore corpus until HTTP surfaces exist.
+  if (ccbAuthorityActive && !isWebUiBrowserMode()) {
     const [skills, mcpServers] = await Promise.all([loadCcbGuidSkillsCatalog(), loadCcbGuidMcpCatalog()]);
     return { source: 'ccb', skills, mcpServers };
   }

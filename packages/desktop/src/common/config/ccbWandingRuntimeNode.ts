@@ -6,9 +6,10 @@
  * Main-process-only helpers (uses node:fs). Do not import from renderer.
  */
 
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { existsSync } from 'node:fs';
 import { resolveCcbClaudeConfigDir } from './ccbWandingRuntime';
 
 export function isCcbWandingInstallPresent(configDir = resolveCcbClaudeConfigDir()): boolean {
@@ -23,25 +24,84 @@ export function isCcbMcpAuthorityActive(): boolean {
   return isCcbWandingInstallPresent();
 }
 
-/** Resolve CCB-Wanding CLI used for MCP manifest probes. */
-export function resolveCcbWandingCliPath(): string | null {
+/**
+ * HKCU InstallDir written by NSIS (`Software\CCB-Wanding\CCB-Wanding`).
+ * Best-effort — returns null if reg.exe fails or value missing.
+ */
+export function readCcbWandingRegistryInstallDir(): string | null {
+  if (process.platform !== 'win32') {
+    return null;
+  }
+  try {
+    const out = execFileSync(
+      'reg',
+      ['query', 'HKCU\\Software\\CCB-Wanding\\CCB-Wanding', '/v', 'InstallDir'],
+      { encoding: 'utf8', windowsHide: true, timeout: 5000 },
+    );
+    const match = out.match(/InstallDir\s+REG_SZ\s+(.+)/i);
+    const value = match?.[1]?.trim();
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+function pushCliUnderInstallRoot(candidates: string[], installRoot: string | null | undefined): void {
+  if (!installRoot) return;
+  const root = installRoot.trim().replace(/[\\/]+$/, '');
+  if (!root) return;
+  candidates.push(join(root, 'dist', 'cli-bun.js'));
+  candidates.push(join(root, 'dist', 'cli.js'));
+}
+
+/**
+ * Ordered CLI path candidates for CCB-Wanding.
+ * Official Programs tree + NSIS registry must beat legacy residue paths
+ * (`%LOCALAPPDATA%\CCB-Wanding`, `D:\CCB-Wanding`) — otherwise continuity/MCP health
+ * attach to incomplete leftovers after a proper Programs install.
+ *
+ * Exported for unit tests (order contract).
+ */
+export function listCcbWandingCliCandidates(): string[] {
+  const candidates: string[] = [];
+
   const fromEnv = process.env.CCB_WANDING_CLI ?? process.env.CCB_WANDING_CLI_PATH;
-  if (fromEnv && existsSync(fromEnv)) {
-    return fromEnv;
+  if (fromEnv) {
+    candidates.push(fromEnv);
   }
 
-  const candidates: string[] = [];
+  const fromInstallEnv = process.env.CCB_WANDING_INSTALL_DIR ?? process.env.CCB_INSTALL_DIR;
+  pushCliUnderInstallRoot(candidates, fromInstallEnv);
+
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
-    candidates.push(join(process.env.LOCALAPPDATA, 'CCB-Wanding', 'dist', 'cli-bun.js'));
-    candidates.push(join(process.env.LOCALAPPDATA, 'CCB-Wanding', 'dist', 'cli.js'));
-    candidates.push('D:\\CCB-Wanding\\dist\\cli-bun.js');
-    candidates.push('D:\\CCB-Wanding\\dist\\cli.js');
+    pushCliUnderInstallRoot(candidates, readCcbWandingRegistryInstallDir());
+    // Official overlay install root (NSIS default InstallDir)
+    pushCliUnderInstallRoot(candidates, join(process.env.LOCALAPPDATA, 'Programs', 'CCB-Wanding'));
+    // Legacy / residue trees (after purge these should be gone; keep as last resort)
+    pushCliUnderInstallRoot(candidates, join(process.env.LOCALAPPDATA, 'CCB-Wanding'));
+    pushCliUnderInstallRoot(candidates, 'D:\\CCB-Wanding');
+    pushCliUnderInstallRoot(candidates, 'C:\\CCB-Wanding');
+    pushCliUnderInstallRoot(candidates, 'E:\\CCB-Wanding');
   }
-  candidates.push(join(homedir(), 'CCB-Wanding', 'dist', 'cli-bun.js'));
-  candidates.push(join(homedir(), 'CCB-Wanding', 'dist', 'cli.js'));
+
+  pushCliUnderInstallRoot(candidates, join(homedir(), 'CCB-Wanding'));
   candidates.push(join(homedir(), '.ccb-wanding', 'dist', 'cli.js'));
 
-  for (const candidate of candidates) {
+  // de-dupe preserving order
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const c of candidates) {
+    const key = c.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(c);
+  }
+  return unique;
+}
+
+/** Resolve CCB-Wanding CLI used for MCP manifest probes. */
+export function resolveCcbWandingCliPath(): string | null {
+  for (const candidate of listCcbWandingCliCandidates()) {
     if (existsSync(candidate)) {
       return candidate;
     }

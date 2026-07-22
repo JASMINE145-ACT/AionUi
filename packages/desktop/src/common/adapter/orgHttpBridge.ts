@@ -10,6 +10,7 @@ import {
   BackendHttpError,
   backendFetchCredentials,
   isBackendHttpError,
+  isWebUiBrowserMode,
   type HttpRequestOptions,
 } from '@/common/adapter/httpBridge';
 
@@ -108,15 +109,20 @@ async function orgRawFetchViaBrowser(
   body?: unknown,
   extraHeaders?: Record<string, string>
 ): Promise<OrgRawHttpResponse> {
-  const baseUrl = getOrgBaseUrl();
-  if (!baseUrl) {
-    throw new Error('ORG_SERVER_URL is not configured');
-  }
-
-  const url = `${baseUrl}${path}`;
   const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
   if (body !== undefined && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
+  }
+
+  let url: string;
+  if (isWebUiBrowserMode()) {
+    url = `/api/webui/org${path}`;
+  } else {
+    const baseUrl = getOrgBaseUrl();
+    if (!baseUrl) {
+      throw new Error('ORG_SERVER_URL is not configured');
+    }
+    url = `${baseUrl}${path}`;
   }
 
   return fetch(url, {

@@ -10,6 +10,9 @@ import * as path from 'path';
 import { networkInterfaces } from 'os';
 import { getSystemDir } from './initStorage';
 import { httpRequest } from '@/common/adapter/httpBridge';
+import { listCcbAgents } from '@/common/config/ccbAgents';
+import { isCcbWandingInstallPresent } from '@/common/config/ccbWandingRuntimeNode';
+import { readOrgServerUrl } from '@process/utils/orgServerConfig';
 import { startWebHost, type WebHostHandle } from '@aionui/web-host';
 import { getDataPath } from './utils';
 
@@ -259,6 +262,14 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     backend: {
       kind: 'useExistingBackend',
       port: backendPort,
+    },
+    webUiSurface: {
+      getRuntimeConfig: () => ({
+        orgServerUrl: readOrgServerUrl(),
+        ssoMode: process.env.AIONUI_SSO_MODE?.trim() ?? '',
+      }),
+      isCcbAuthorityActive: () => isCcbWandingInstallPresent(),
+      listCcbAgents: () => listCcbAgents(),
     },
   });
 

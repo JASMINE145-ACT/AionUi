@@ -5,10 +5,12 @@
  */
 
 import { ccbAgentsService } from '@/common/adapter/ipcBridge';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import CcbPersonalMemoryLearningBanner from '@/renderer/components/ccb/CcbPersonalMemoryLearningBanner';
 import { PrecipitationSessionChip } from '@/renderer/components/precipitation/PrecipitationSessionChip';
 import { useCcbPersonalMemoryLearning } from '@/renderer/hooks/useCcbPersonalMemoryLearning';
 import { usePrecipitationSessionPending } from '@/renderer/hooks/usePrecipitationSessionPending';
+import { usePrecipitationSummary } from '@/renderer/hooks/usePrecipitationSummary';
 import { useSessionPrecipitationSchedule } from '@/renderer/hooks/useSessionPrecipitationSchedule';
 import { useCcbAuthorityActive } from '@/renderer/hooks/agent/useCcbModelInfo';
 import { mergeConversationLoadedSkills } from '@/renderer/pages/guid/utils/guidCapabilitiesCatalog';
@@ -227,15 +229,19 @@ const ChatConversation: React.FC<{
 }> = ({ conversation, hideSendBox }) => {
   const { t } = useTranslation();
   const { active: ccbAuthorityActive } = useCcbAuthorityActive();
-  const personalMemoryLearning = useCcbPersonalMemoryLearning(ccbAuthorityActive);
+  const memorySurfacesEnabled = ccbAuthorityActive && !isWebUiBrowserMode();
+  const personalMemoryLearning = useCcbPersonalMemoryLearning(memorySurfacesEnabled);
   const [chipDismissed, setChipDismissed] = useState(false);
   const sessionPendingCount = usePrecipitationSessionPending(
     conversation?.id,
-    ccbAuthorityActive && conversation?.type === 'acp'
+    memorySurfacesEnabled && conversation?.type === 'acp'
+  );
+  const precipitationSummary = usePrecipitationSummary(
+    memorySurfacesEnabled && conversation?.type === 'acp'
   );
   useSessionPrecipitationSchedule({
     conversationId: conversation?.id,
-    enabled: ccbAuthorityActive && conversation?.type === 'acp',
+    enabled: memorySurfacesEnabled && conversation?.type === 'acp',
   });
   useEffect(() => {
     setChipDismissed(false);
@@ -255,7 +261,7 @@ const ChatConversation: React.FC<{
   const acpAssistantId = acpConversation ? (resolveAssistantConfigId(acpConversation) ?? undefined) : undefined;
 
   const { data: sessionCcbAgent } = useSWR(
-    acpAssistantId ? `conversation.ccbAgent.${acpAssistantId}` : null,
+    acpAssistantId && !isWebUiBrowserMode() ? `conversation.ccbAgent.${acpAssistantId}` : null,
     () => ccbAgentsService.getAgent.invoke({ id: acpAssistantId! }),
   );
 
@@ -394,6 +400,26 @@ const ChatConversation: React.FC<{
           <PrecipitationSessionChip
             conversationId={conversation.id}
             pendingCount={sessionPendingCount}
+            lastEvent={
+              precipitationSummary?.conversationId === conversation.id
+                ? precipitationSummary.lastEvent
+                : null
+            }
+            skippedReason={
+              precipitationSummary?.conversationId === conversation.id
+                ? precipitationSummary.skippedReason
+                : null
+            }
+            lastWorkerDetail={
+              precipitationSummary?.conversationId === conversation.id
+                ? precipitationSummary.lastWorkerDetail
+                : null
+            }
+            status={
+              precipitationSummary?.conversationId === conversation.id
+                ? precipitationSummary.status
+                : null
+            }
             onDismiss={() => setChipDismissed(true)}
           />
         ) : null}

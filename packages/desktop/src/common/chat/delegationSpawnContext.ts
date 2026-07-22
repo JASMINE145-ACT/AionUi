@@ -19,6 +19,8 @@
 
 import type { DelegationRun } from './delegationRun';
 import { buildDelegationRuns } from './delegationRun';
+import type { DecompositionPlan } from './decompositionPlan';
+import { syncPlanWithDelegationRuns } from './decompositionPlan';
 import type { NormalizedToolCall } from './normalizeToolCall';
 
 export type SpawnContextTier = 'stable' | 'dynamic' | 'ephemeral';
@@ -145,6 +147,14 @@ export function assessTurnDelegationSpawn(tools: NormalizedToolCall[]): TurnDele
     guidDirect,
     allHealthy: reports.every((report) => report.healthy),
   };
+}
+
+/** Consumer-plane: link B0 DelegationRuns onto a DecompositionPlan for View Steps timeline. */
+export function syncTurnPlanWithTools(
+  plan: DecompositionPlan,
+  tools: NormalizedToolCall[],
+): DecompositionPlan {
+  return syncPlanWithDelegationRuns(plan, buildDelegationRuns(tools));
 }
 
 /** Path A smoke fixture — default orchestrator 查直接50 (2026-07-07 user smoke). */

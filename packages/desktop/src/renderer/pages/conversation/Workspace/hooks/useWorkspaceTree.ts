@@ -10,7 +10,7 @@ import { emitter } from '@/renderer/utils/emitter';
 import { dispatchWorkspaceHasFilesEvent } from '@/renderer/utils/workspace/workspaceEvents';
 import { useCallback, useRef, useState } from 'react';
 import type { SelectedNodeRef } from '../types';
-import { getFirstLevelKeys, mergeLoadedChildren } from '../utils/treeHelpers';
+import { getFirstLevelKeys, mergeLoadedChildren, workspaceTreeHasVisibleContent } from '../utils/treeHelpers';
 
 interface UseWorkspaceTreeOptions {
   workspace: string;
@@ -122,7 +122,7 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
 
           // 根据是否有文件决定工作空间面板的展开/折叠状态
           // Determine workspace panel expand/collapse state based on files
-          const hasFiles = res.length > 0 && (res[0]?.children?.length ?? 0) > 0;
+          const hasFiles = workspaceTreeHasVisibleContent(res);
 
           const wasFirstLoad = isFirstLoadRef.current;
           if (isFirstLoadRef.current) {

@@ -340,3 +340,22 @@ export function getTargetFolderPath(
     relativePath: null,
   };
 }
+
+/**
+ * True when the workspace tree shows at least one file or non-empty folder at the
+ * roots returned by getWorkspace (one level). Root-level files have no children.
+ */
+export function workspaceTreeHasVisibleContent(nodes: IDirOrFile[]): boolean {
+  if (nodes.length === 0) {
+    return false;
+  }
+  for (const node of nodes) {
+    if (node.isFile) {
+      return true;
+    }
+    if ((node.children?.length ?? 0) > 0) {
+      return true;
+    }
+  }
+  return false;
+}

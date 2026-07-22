@@ -60,7 +60,11 @@ export const WEBUI_DEFAULT_PORT = (() => {
   return 25809;
 })();
 
-export const TEAM_MODE_ENABLED = true;
+/** Mixing product: hide sidebar Teams panel and /team routes. */
+export const TEAM_MODE_ENABLED = false;
+
+/** Mixing product: hide Settings → 桌面宠物 and tray pet menu. */
+export const DESKTOP_PET_ENABLED = false;
 
 // ===== AI Provider 相关常量 =====
 

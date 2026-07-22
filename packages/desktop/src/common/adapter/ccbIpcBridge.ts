@@ -142,6 +142,17 @@ export const ccbPrecipitationService = {
   schedule: bridge.buildProvider<{ ok: boolean; detail?: string }, PrecipitationScheduleInput>(
     'ccb.precipitation.schedule'
   ),
+  checkpoint: bridge.buildProvider<
+    { ok: boolean; shouldFullReview: boolean; detail?: string },
+    {
+      sessionId: string;
+      conversationId: string;
+      turnId: string;
+      interrupted?: boolean;
+      failed?: boolean;
+      hasFinalResponse?: boolean;
+    }
+  >('ccb.precipitation.checkpoint'),
   recordEvent: bridge.buildProvider<{ ok: boolean; detail?: string }, PrecipitationFunnelEventInput>(
     'ccb.precipitation.recordEvent'
   ),

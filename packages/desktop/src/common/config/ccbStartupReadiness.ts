@@ -16,6 +16,7 @@ import type {
   CcbStartupReadinessStatus,
 } from './ccbStartupReadinessShared';
 import {
+  CCB_STARTUP_CORE_WARM_WRAPPER_DEADLINE_MS,
   isCcbStartupCoreMcpOk,
   mergeWarmResultsOnTimeout,
   parseWarmWandingMcpStdout,
@@ -40,8 +41,6 @@ export {
   parseWarmWandingMcpStdout,
 } from './ccbStartupReadinessShared';
 
-/** Quotation alone — gates soft_ready (Guid send path). */
-const CORE_WARM_TIMEOUT_MS = 90_000;
 /** Accurate is best-effort; must not force soft_ready if quotation already OK. */
 const BEST_EFFORT_WARM_TIMEOUT_MS = 60_000;
 
@@ -66,7 +65,7 @@ function spawnWarmScript(
   servers: readonly string[],
   options: { timeoutMs?: number } = {}
 ): Promise<CcbStartupMcpWarmResult[]> {
-  const timeoutMs = options.timeoutMs ?? CORE_WARM_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? CCB_STARTUP_CORE_WARM_WRAPPER_DEADLINE_MS;
   const installerRoot = resolveCcbInstallerRoot();
   const installDir = resolveCcbWandingInstallDir();
   const configDir = resolveCcbClaudeConfigDir();
@@ -202,7 +201,7 @@ async function runPipeline(): Promise<CcbStartupReadinessStatus> {
 
     // Quotation first (gates soft_ready). Resolve pipeline as soon as core is OK so
     // ensureStartupReadiness / initial ACP send are not held by accurate best-effort warm.
-    const quotationResults = await spawnWarmScript(['quotation'], { timeoutMs: CORE_WARM_TIMEOUT_MS });
+    const quotationResults = await spawnWarmScript(['quotation']);
     const coreOk = isCcbStartupCoreMcpOk(quotationResults);
     const coreFailed = quotationResults.filter((r) => !r.ok);
 

@@ -4,17 +4,20 @@ import { IconDown, IconRight } from '@arco-design/web-react/icon';
 import { Checklist, Right } from '@icon-park/react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ipcBridge } from '@/common';
-import type { IMessageAcpToolCall } from '@/common/chat/chatLib';
+import type { IMessageAcpToolCall, IMessagePlan } from '@/common/chat/chatLib';
 import {
   buildDelegationRuns,
   formatDelegationHeader,
   getOrphanTopLevelTools,
   type DelegationRun,
 } from '@/common/chat/delegationRun';
+import type { DecompositionPlan } from '@/common/chat/decompositionPlan';
+import { derivePlanFromDelegationRuns } from '@/common/chat/decompositionPlan';
 import { formatOperatorToolLabel } from '@/common/chat/operatorToolLabels';
 import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/common/chat/normalizeToolCall';
 import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
 import SubagentDrawer from '../acp/SubagentDrawer';
+import DecompositionPlanTimeline from './DecompositionPlanTimeline';
 import './MessageToolGroupSummary.css';
 
 function findAgentAcpMessage(messages: ToolMessage[], parentToolUseId: string): IMessageAcpToolCall | undefined {
@@ -167,7 +170,13 @@ const DelegationRunGroup: React.FC<{
   );
 };
 
-const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messages }) => {
+const MessageToolGroupSummary: React.FC<{
+  messages: ToolMessage[];
+  /** Same-turn plan messages (subagent TodoWrite) for SubagentDrawer lookup. */
+  turnPlanMessages?: IMessagePlan[];
+  /** Optional multi-intent plan — when present, Plan↔Run timeline (OBSERVE.DELEGATION.002). */
+  decompositionPlan?: DecompositionPlan;
+}> = ({ messages, turnPlanMessages, decompositionPlan }) => {
   const hasRunning = hasRunningToolMessages(messages);
   const [showMore, setShowMore] = useState(hasRunning);
   const [drawerMessage, setDrawerMessage] = useState<IMessageAcpToolCall | null>(null);
@@ -179,6 +188,10 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
   const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
   const delegationRuns = useMemo(() => buildDelegationRuns(tools), [tools]);
   const orphanTools = useMemo(() => getOrphanTopLevelTools(tools), [tools]);
+  const effectivePlan = useMemo(
+    () => decompositionPlan ?? derivePlanFromDelegationRuns(delegationRuns),
+    [decompositionPlan, delegationRuns],
+  );
   const visibleStepCount = delegationRuns.length + orphanTools.length;
   const runningRuns = useMemo(() => delegationRuns.filter((run) => run.status === 'running'), [delegationRuns]);
 
@@ -216,6 +229,7 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
       </div>
       {showMore && (
         <div className='tool-group-summary__body'>
+          {effectivePlan ? <DecompositionPlanTimeline plan={effectivePlan} tools={tools} /> : null}
           {delegationRuns.map((run) => (
             <DelegationRunGroup
               key={run.parentToolUseId}
@@ -238,6 +252,7 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
           onClose={() => setDrawerMessage(null)}
           message={drawerMessage}
           turnToolMessages={messages}
+          turnPlanMessages={turnPlanMessages}
         />
       )}
     </div>

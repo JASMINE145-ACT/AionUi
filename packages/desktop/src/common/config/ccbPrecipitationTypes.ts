@@ -38,6 +38,22 @@ export type PrecipitationSummary = {
   error: string | null;
   skippedReason: string | null;
   lastRunAt: string | null;
+  /** Last funnel event name (desensitized). */
+  lastEvent?: string | null;
+  /** Last schedule/worker detail code (desensitized). */
+  lastWorkerDetail?: string | null;
+};
+
+export type PrecipitationFunnelEventInput = {
+  event: string;
+  conversationId?: string;
+  sessionId?: string;
+  runId?: string;
+  skippedReason?: string;
+  workerDetail?: string;
+  durationMs?: number;
+  status?: string;
+  pendingCount?: number;
 };
 
 export type PrecipitationDecisionInput = {
@@ -57,4 +73,8 @@ export type PrecipitationScheduleInput = {
   conversationId: string;
   turnId?: string;
   agentId?: string;
+  /** Skip nudge gate (idle fallback / explicit force). */
+  force?: boolean;
+  /** When true, do not bump nudge counter again (already checkpointed). */
+  skipCheckpoint?: boolean;
 };

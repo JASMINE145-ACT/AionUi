@@ -5,9 +5,11 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbAgentsService } from '@/common/adapter/ipcBridge';
 import { assistantDetailFromCcbAgent } from '@/common/config/ccbAgentCatalog';
 import { assistantDetailFromCcbProfile } from '@/common/config/ccbAssistantCatalog';
+import { fetchWebUiCcbAgents } from '@/common/webui/ccbWebApi';
 import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
 
 export async function fetchGuidAssistantDetail(
@@ -15,6 +17,12 @@ export async function fetchGuidAssistantDetail(
   options: { localeKey: string; ccbAuthorityActive: boolean },
 ): Promise<AssistantDetail | null> {
   if (options.ccbAuthorityActive) {
+    // WebUI: no profile/getAgent IPC — resolve from HTTP agent list.
+    if (isWebUiBrowserMode()) {
+      const agents = await fetchWebUiCcbAgents().catch((): [] => []);
+      const agent = agents.find((entry) => entry.id === id) ?? null;
+      return agent ? assistantDetailFromCcbAgent(agent) : null;
+    }
     const profile = await ipcBridge.ccbAssistantProfilesService.getProfile.invoke({ id }).catch((): null => null);
     if (profile) {
       return assistantDetailFromCcbProfile(profile);

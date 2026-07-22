@@ -28,6 +28,23 @@ export type BackendSystemDirs = {
 };
 
 /**
+ * Runtime config injected into the WebUI browser (preload-equivalent).
+ */
+export type WebUiRuntimeConfig = {
+  orgServerUrl: string;
+  ssoMode: string;
+};
+
+/**
+ * Electron-backed callbacks for WebUI-only HTTP routes (`/api/webui/*`).
+ */
+export type WebUiSurface = {
+  getRuntimeConfig(): WebUiRuntimeConfig | Promise<WebUiRuntimeConfig>;
+  isCcbAuthorityActive(): boolean | Promise<boolean>;
+  listCcbAgents(): Promise<readonly unknown[]>;
+};
+
+/**
  * Options for starting WebHost
  */
 export type WebHostOptions = {
@@ -38,6 +55,7 @@ export type WebHostOptions = {
   dataDir?: string;
   logDir?: string;
   dirs?: BackendSystemDirs;
+  webUiSurface?: WebUiSurface;
   backend: { kind: 'ownBackend'; resolveBackend: BackendBinaryResolver } | { kind: 'useExistingBackend'; port: number };
 };
 

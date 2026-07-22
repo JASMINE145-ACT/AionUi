@@ -1,0 +1,112 @@
+{
+  "sider": {
+    "title": "Organization"
+  },
+  "tabs": {
+    "users": "Users",
+    "structure": "Structure"
+  },
+  "page": {
+    "title": "Organization users",
+    "description": "Create accounts and set department, title, manager, and business permissions."
+  },
+  "columns": {
+    "username": "Username",
+    "department": "Department",
+    "jobTitle": "Job title",
+    "role": "Role",
+    "capabilities": "Permissions",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "role": {
+    "manager": "Manager",
+    "employee": "Employee",
+    "admin": "System admin"
+  },
+  "capability": {
+    "priceWrite": "Price library write",
+    "supplierWrite": "Supplier write"
+  },
+  "status": {
+    "active": "Active",
+    "transferred": "Transferred",
+    "suspended": "Suspended",
+    "terminated": "Terminated"
+  },
+  "actions": {
+    "create": "New user",
+    "edit": "Edit",
+    "delete": "Delete",
+    "resetPassword": "Reset password",
+    "refresh": "Refresh"
+  },
+  "modal": {
+    "createTitle": "New user",
+    "editTitle": "Edit user",
+    "deleteTitle": "Delete user",
+    "deleteConfirm": "Delete user \"{{username}}\"? This cannot be undone. {{count}} direct report(s) will have their manager cleared.",
+    "resetPasswordTitle": "Reset password",
+    "resetPasswordConfirm": "Reset password for \"{{username}}\" and force them to sign in again. Your session stays valid."
+  },
+  "form": {
+    "username": "Username",
+    "usernameRequired": "Username is required",
+    "usernameHint": "3–32 characters; letters, digits, _ and - only; cannot start/end with _ or -. No Chinese. Example: emp01",
+    "usernamePlaceholder": "e.g. emp01",
+    "usernameLength": "Username must be 3–32 characters",
+    "usernameCharset": "Username may only contain letters, digits, underscores, and hyphens (no Chinese)",
+    "usernameEdge": "Username must not start or end with a hyphen or underscore",
+    "password": "Initial password",
+    "passwordRequired": "Password is required",
+    "passwordHint": "8–128 characters; avoid common weak passwords (e.g. password, 12345678)",
+    "passwordMin": "Password must be at least 8 characters",
+    "passwordMax": "Password must not exceed 128 characters",
+    "passwordWeak": "Password is too common; choose a stronger one",
+    "department": "Department",
+    "departmentPlaceholder": "e.g. Procurement",
+    "jobTitle": "Job title",
+    "role": "Role",
+    "manager": "Reports to",
+    "managerPlaceholder": "Optional",
+    "status": "Employment status",
+    "capabilities": "Business permissions",
+    "isAdmin": "System admin",
+    "isAdminHint": "Grants organization user management. Cannot demote the last admin or the system default account.",
+    "newPassword": "New password",
+    "newPasswordConfirm": "Confirm password",
+    "passwordMismatch": "Passwords do not match"
+  },
+  "structure": {
+    "title": "Organization structure",
+    "hint": "The reporting tree is built from manager links; members without a manager appear in the \"No manager\" section below. Drag to pan, scroll to zoom. Edit managers on the Users tab.",
+    "empty": "No users yet",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to view",
+    "fitShort": "Fit",
+    "resetZoom": "Actual size",
+    "unassigned": "No manager",
+    "reports": "{{n}} direct"
+  },
+  "alerts": {
+    "notConfigured": "Company server is not configured.",
+    "adminOnly": "Only system admins can manage organization users.",
+    "loadFailed": "Failed to load (status {{status}})",
+    "loadFailedGeneric": "Failed to load"
+  },
+  "messages": {
+    "created": "User created",
+    "updated": "User updated",
+    "deleted": "Deleted {{username}} (cleared {{count}} report links)",
+    "cannotDeleteSelf": "You cannot delete your own account",
+    "cannotResetSelf": "Use Change password for your own account",
+    "deleteFailed": "Delete failed ({{detail}})",
+    "deleteFailedGeneric": "Delete failed",
+    "resetPasswordOk": "Password reset for {{username}}",
+    "resetPasswordFailed": "Password reset failed ({{detail}})",
+    "resetPasswordFailedGeneric": "Password reset failed",
+    "saveFailed": "Save failed ({{detail}})",
+    "saveFailedGeneric": "Save failed"
+  }
+}

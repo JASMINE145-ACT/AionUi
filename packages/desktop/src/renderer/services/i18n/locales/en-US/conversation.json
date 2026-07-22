@@ -359,6 +359,17 @@
       "vscode": "VS Code",
       "terminal": "Terminal",
       "explorer": "File Explorer"
+    },
+    "autoOpenHint": "The agent wrote files to the project.",
+    "autoOpenCta": "View project"
+  },
+  "plan": {
+    "messageTitle": "To-do list",
+    "checklist": {
+      "header": "{{done}} of {{total}} Done"
+    },
+    "drawer": {
+      "sectionTitle": "Execution plan"
     }
   },
   "minimap": {

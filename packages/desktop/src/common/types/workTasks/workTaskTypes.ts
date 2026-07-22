@@ -18,17 +18,6 @@ export type WorkTaskMember = {
   work_task_role: WorkTaskRole;
 };
 
-export type CreateTeamUserParams = {
-  username: string;
-  password: string;
-  work_task_role?: WorkTaskRole;
-};
-
-export type UpdateTeamUserRoleParams = {
-  userId: string;
-  work_task_role: WorkTaskRole;
-};
-
 export type WorkTaskUserSummary = {
   id: string;
   username: string;

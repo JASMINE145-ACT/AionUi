@@ -1,0 +1,29 @@
+/**
+ * Org settings tabs — structure canvas must fill remaining page height.
+ * Arco Tabs default content area does not stretch in a flex column.
+ */
+
+.org-settings-tabs.arco-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.org-settings-tabs > .arco-tabs-header {
+  flex-shrink: 0;
+}
+
+.org-settings-tabs > .arco-tabs-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.org-settings-tabs .arco-tabs-content-inner,
+.org-settings-tabs .arco-tabs-content-item,
+.org-settings-tabs .arco-tabs-pane {
+  height: 100%;
+  min-height: 0;
+}

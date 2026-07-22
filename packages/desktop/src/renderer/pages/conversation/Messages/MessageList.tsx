@@ -5,7 +5,7 @@
  */
 
 import type { IConversationArtifact } from '@/common/adapter/ipcBridge';
-import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
+import type { IMessageAcpToolCall, IMessagePlan, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { iconColors } from '@/renderer/styles/colors';
 import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/utils/chat/chatMinimapEvents';
@@ -48,6 +48,8 @@ type IMessageVO =
       type: 'tool_summary';
       id: string;
       messages: Array<IMessageToolGroup | IMessageAcpToolCall | IMessageToolCall>;
+      /** Suppressed subagent TodoWrite plans for this turn's tool group. */
+      planMessages: IMessagePlan[];
       sourceMessageIds: string[];
       created_at: number;
     };
@@ -261,7 +263,23 @@ const MessageList: React.FC<{
     let diffsSourceMessageIds: string[] = [];
     let toolList: Array<IMessageToolGroup | IMessageAcpToolCall | IMessageToolCall> = [];
     let toolSourceMessageIds: string[] = [];
+    let turnPlanList: IMessagePlan[] = [];
     let seenAgentDelegation = false;
+
+    const syncToolSummaryPlans = () => {
+      for (let index = result.length - 1; index >= 0; index -= 1) {
+        const item = result[index];
+        if (item.type === 'tool_summary') {
+          item.planMessages = [...turnPlanList];
+          break;
+        }
+      }
+    };
+
+    const pushSuppressedPlan = (message: IMessagePlan) => {
+      turnPlanList.push(message);
+      syncToolSummaryPlans();
+    };
 
     const pushFileDffChanges = (changes: FileChangeInfo, sourceMessageId: string, created_at: number) => {
       if (!diffsChanges.length) {
@@ -278,6 +296,7 @@ const MessageList: React.FC<{
       diffsSourceMessageIds.push(sourceMessageId);
       toolList = [];
       toolSourceMessageIds = [];
+      turnPlanList = [];
     };
     const pushToolList = (message: IMessageToolGroup | IMessageAcpToolCall | IMessageToolCall) => {
       if (!toolList.length) {
@@ -286,6 +305,7 @@ const MessageList: React.FC<{
           type: 'tool_summary',
           id: `tool-summary-${message.id}`,
           messages: toolList,
+          planMessages: [...turnPlanList],
           sourceMessageIds: toolSourceMessageIds,
           created_at: message.created_at ?? 0,
         });
@@ -315,10 +335,17 @@ const MessageList: React.FC<{
       // message tagged with parentToolUseId. It's internal sub-agent scratch state,
       // not part of the main flow — don't let it land as a standalone card.
       if (message.type === 'plan') {
-        if (message.content?.parentToolUseId) continue;
+        const planMessage = message as IMessagePlan;
+        if (planMessage.content?.parentToolUseId) {
+          pushSuppressedPlan(planMessage);
+          continue;
+        }
         // Fallback: seenAgentDelegation persists across toolList flushes, so plan messages
         // that arrive after the tool group closes (e.g. after the main reply) are still suppressed.
-        if (seenAgentDelegation) continue;
+        if (seenAgentDelegation) {
+          pushSuppressedPlan(planMessage);
+          continue;
+        }
       }
       if (message.type === 'tool_group') {
         if (message.content.length === 1) {
@@ -353,6 +380,7 @@ const MessageList: React.FC<{
       }
       toolList = [];
       toolSourceMessageIds = [];
+      turnPlanList = [];
       diffsChanges = [];
       diffsSourceMessageIds = [];
       result.push(message);
@@ -500,7 +528,9 @@ const MessageList: React.FC<{
           style={highlighted ? highlightStyle : undefined}
         >
           {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
-          {item.type === 'tool_summary' && <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>}
+          {item.type === 'tool_summary' && (
+            <MessageToolGroupSummary messages={item.messages} turnPlanMessages={item.planMessages} />
+          )}
         </div>
       );
     }

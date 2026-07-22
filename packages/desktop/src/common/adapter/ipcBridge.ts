@@ -79,9 +79,7 @@ import type {
 } from '../types/team/teamTypes';
 import type {
   AddWorkTaskAttachmentParams,
-  CreateTeamUserParams,
   CreateWorkTaskParams,
-  UpdateTeamUserRoleParams,
   UpdateWorkTaskParams,
   WorkTask,
   WorkTaskMember,
@@ -90,6 +88,13 @@ import type {
   WorkTaskScope,
   WorkTaskStatus,
 } from '../types/workTasks/workTaskTypes';
+import type {
+  CreateOrgUserParams,
+  DeleteOrgUserParams,
+  OrgUser,
+  OrgUserDeleteResult,
+  UpdateOrgUserParams,
+} from '../types/orgUsers/orgUserTypes';
 import type {
   AutoUpdateStatus,
   UpdateCheckRequest,
@@ -735,15 +740,12 @@ type AuthUser = {
   id: string;
   username: string;
   work_task_role?: 'manager' | 'employee';
+  is_admin?: boolean;
 };
 
 type AuthUserResponse = {
   success: boolean;
   user: AuthUser;
-};
-
-type RawAuthUser = AuthUser & {
-  password_hash?: string;
 };
 
 const normalizeAuthUser = (user: AuthUser): WorkTaskMember => ({
@@ -754,18 +756,6 @@ const normalizeAuthUser = (user: AuthUser): WorkTaskMember => ({
 
 export const auth = {
   currentUser: withResponseMap(httpGet<AuthUserResponse, void>('/api/auth/user'), (raw) => normalizeAuthUser(raw.user)),
-  listUsers: withResponseMap(httpGet<RawAuthUser[], void>('/api/auth/internal/users'), (users) =>
-    users.map(normalizeAuthUser)
-  ),
-  createUser: httpPost<WorkTaskMember, CreateTeamUserParams>(
-    '/api/auth/internal/users',
-    (p) => ({
-      username: p.username,
-      password_hash: p.password,
-      work_task_role: p.work_task_role ?? 'employee',
-    })
-  ),
-  updateWorkTaskRole: stubProvider<void, UpdateTeamUserRoleParams>('auth.updateWorkTaskRole', undefined),
 };
 
 export const orgKnowledge = {
@@ -866,6 +856,39 @@ export const workTask = {
   onTaskCreated: wsEmitter<WorkTask>('work-task.created'),
   onTaskUpdated: wsEmitter<WorkTask>('work-task.updated'),
   onTaskDeleted: wsEmitter<{ task_id: string }>('work-task.deleted'),
+};
+
+export const orgUsers = {
+  list: orgHttpGet<OrgUser[], void>('/api/org-users'),
+  create: orgHttpPost<OrgUser, CreateOrgUserParams>('/api/org-users', (p) => ({
+    username: p.username,
+    password: p.password,
+    ...(p.work_task_role ? { work_task_role: p.work_task_role } : {}),
+    ...(p.department ? { department: p.department } : {}),
+    ...(p.job_title ? { job_title: p.job_title } : {}),
+    ...(p.manager_user_id ? { manager_user_id: p.manager_user_id } : {}),
+    ...(p.employment_status ? { employment_status: p.employment_status } : {}),
+    ...(p.capabilities ? { capabilities: p.capabilities } : {}),
+  })),
+  update: orgHttpPut<OrgUser, UpdateOrgUserParams>(
+    (p) => `/api/org-users/${encodeURIComponent(p.user_id)}`,
+    (p) => ({
+      ...(p.work_task_role ? { work_task_role: p.work_task_role } : {}),
+      ...(p.department !== undefined ? { department: p.department } : {}),
+      ...(p.job_title !== undefined ? { job_title: p.job_title } : {}),
+      ...(p.manager_user_id !== undefined ? { manager_user_id: p.manager_user_id } : {}),
+      ...(p.employment_status ? { employment_status: p.employment_status } : {}),
+      ...(p.capabilities !== undefined ? { capabilities: p.capabilities } : {}),
+      ...(p.is_admin !== undefined ? { is_admin: p.is_admin } : {}),
+    })
+  ),
+  delete: orgHttpDelete<OrgUserDeleteResult, DeleteOrgUserParams>(
+    (p) => `/api/org-users/${encodeURIComponent(p.user_id)}`
+  ),
+  resetPassword: orgHttpPost<void, { user_id: string; password: string }>(
+    (p) => `/api/org-users/${encodeURIComponent(p.user_id)}/reset-password`,
+    (p) => ({ password: p.password })
+  ),
 };
 
 export const googleAuth = {

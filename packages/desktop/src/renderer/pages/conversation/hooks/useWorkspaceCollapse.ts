@@ -1,11 +1,14 @@
 import { blurActiveElement } from '@/renderer/utils/ui/focus';
+import { showWorkspaceAutoOpenToast } from '@/renderer/utils/workspace/workspaceAutoOpenToast';
 import {
   WORKSPACE_HAS_FILES_EVENT,
+  WORKSPACE_OPEN_REQUEST_EVENT,
   WORKSPACE_TOGGLE_EVENT,
   dispatchWorkspaceStateEvent,
   type WorkspaceHasFilesDetail,
 } from '@/renderer/utils/workspace/workspaceEvents';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type UseWorkspaceCollapseParams = {
   workspaceEnabled: boolean;
@@ -59,12 +62,14 @@ export function useWorkspaceCollapse({
   preferenceKey,
   isTemporaryWorkspace,
 }: UseWorkspaceCollapseParams): UseWorkspaceCollapseReturn {
+  const { t } = useTranslation();
   // Workspace panel always starts collapsed; preference and hasFiles events
-  // drive expand. See WORKSPACE_HAS_FILES_EVENT handler below.
   const [rightSiderCollapsed, setRightSiderCollapsed] = useState(true);
 
   // Mirror ref for collapse state
   const rightCollapsedRef = useRef(rightSiderCollapsed);
+  const midSessionToastKeyRef = useRef<string | null>(null);
+  const openedViaMidSessionCtaRef = useRef(false);
 
   // Keep ref in sync
   useEffect(() => {
@@ -82,6 +87,7 @@ export function useWorkspaceCollapse({
       }
       setRightSiderCollapsed((prev) => {
         const newState = !prev;
+        openedViaMidSessionCtaRef.current = false;
         if (preferenceKey) {
           try {
             localStorage.setItem(`workspace-preference-${preferenceKey}`, newState ? 'collapsed' : 'expanded');
@@ -97,6 +103,21 @@ export function useWorkspaceCollapse({
       window.removeEventListener(WORKSPACE_TOGGLE_EVENT, handleWorkspaceToggle);
     };
   }, [workspaceEnabled, preferenceKey]);
+
+  // External open request (toast CTA, other surfaces)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !workspaceEnabled) {
+      return undefined;
+    }
+    const handleOpenRequest = () => {
+      openedViaMidSessionCtaRef.current = true;
+      setRightSiderCollapsed(false);
+    };
+    window.addEventListener(WORKSPACE_OPEN_REQUEST_EVENT, handleOpenRequest);
+    return () => {
+      window.removeEventListener(WORKSPACE_OPEN_REQUEST_EVENT, handleOpenRequest);
+    };
+  }, [workspaceEnabled]);
 
   // Auto expand/collapse workspace panel based on files state (user preference takes priority)
   useEffect(() => {
@@ -127,34 +148,57 @@ export function useWorkspaceCollapse({
         }
       }
 
-      // If user has preference, use it; otherwise decide by file state
+      // If user has preference, honor it — but mid-session writes get a toast + CTA (WANd.OBSERVE.WORKSPACE.001)
       if (userPreference) {
         const shouldCollapse = userPreference === 'collapsed';
-        if (shouldCollapse !== rightSiderCollapsed) {
-          setRightSiderCollapsed(shouldCollapse);
+        if (
+          userPreference === 'collapsed' &&
+          detail.hasFiles &&
+          !detail.isInitial &&
+          rightCollapsedRef.current &&
+          !openedViaMidSessionCtaRef.current
+        ) {
+          const toastKey = `${preferenceKey ?? 'global'}:${detail.conversation_id ?? ''}:${String(detail.isInitial)}`;
+          if (midSessionToastKeyRef.current !== toastKey) {
+            midSessionToastKeyRef.current = toastKey;
+            showWorkspaceAutoOpenToast({
+              hint: t('conversation.workspace.autoOpenHint'),
+              cta: t('conversation.workspace.autoOpenCta'),
+              onOpen: () => {
+                openedViaMidSessionCtaRef.current = true;
+                setRightSiderCollapsed(false);
+              },
+            });
+          }
         }
-      } else {
-        // No user preference: decide by workspace kind + when the files appeared.
-        // - User-picked workspace: expand on any hasFiles (initial seed is the
-        //   user's own files, worth showing).
-        // - Temporary workspace: ignore the initial seed (backend may inject
-        //   rules/skills the user never asked for) and only expand when files
-        //   show up mid-session.
-        const isUserPicked = !isTemporaryWorkspace;
-        const isMidSession = !detail.isInitial;
-        const allowAutoExpand = isUserPicked || isMidSession;
-        if (allowAutoExpand && detail.hasFiles && rightSiderCollapsed) {
-          setRightSiderCollapsed(false);
-        } else if (!detail.hasFiles && !rightSiderCollapsed) {
+        if (shouldCollapse && !openedViaMidSessionCtaRef.current && !rightSiderCollapsed) {
           setRightSiderCollapsed(true);
+        } else if (!shouldCollapse && rightSiderCollapsed) {
+          setRightSiderCollapsed(false);
         }
+        return;
+      }
+
+      // No user preference: decide by workspace kind + when the files appeared.
+      // - User-picked workspace: expand on any hasFiles (initial seed is the
+      //   user's own files, worth showing).
+      // - Temporary workspace: ignore the initial seed (backend may inject
+      //   rules/skills the user never asked for) and only expand when files
+      //   show up mid-session.
+      const isUserPicked = !isTemporaryWorkspace;
+      const isMidSession = !detail.isInitial;
+      const allowAutoExpand = isUserPicked || isMidSession;
+      if (allowAutoExpand && detail.hasFiles && rightSiderCollapsed) {
+        setRightSiderCollapsed(false);
+      } else if (!detail.hasFiles && !rightSiderCollapsed) {
+        setRightSiderCollapsed(true);
       }
     };
     window.addEventListener(WORKSPACE_HAS_FILES_EVENT, handleHasFiles);
     return () => {
       window.removeEventListener(WORKSPACE_HAS_FILES_EVENT, handleHasFiles);
     };
-  }, [isMobile, workspaceEnabled, rightSiderCollapsed, isTemporaryWorkspace, preferenceKey]);
+  }, [isMobile, workspaceEnabled, rightSiderCollapsed, isTemporaryWorkspace, preferenceKey, t]);
 
   // Broadcast workspace state event
   useEffect(() => {

@@ -1,0 +1,112 @@
+{
+  "sider": {
+    "title": "组织"
+  },
+  "tabs": {
+    "users": "用户",
+    "structure": "架构"
+  },
+  "page": {
+    "title": "组织用户",
+    "description": "创建员工账号，并配置部门、岗位、上级与业务权限。"
+  },
+  "columns": {
+    "username": "用户名",
+    "department": "部门",
+    "jobTitle": "岗位",
+    "role": "角色",
+    "capabilities": "业务权限",
+    "status": "状态",
+    "actions": "操作"
+  },
+  "role": {
+    "manager": "经理",
+    "employee": "员工",
+    "admin": "系统管理员"
+  },
+  "capability": {
+    "priceWrite": "价格库写入",
+    "supplierWrite": "供应商写入"
+  },
+  "status": {
+    "active": "在职",
+    "transferred": "调岗",
+    "suspended": "停用",
+    "terminated": "离职"
+  },
+  "actions": {
+    "create": "新建用户",
+    "edit": "编辑",
+    "delete": "删除",
+    "resetPassword": "重置密码",
+    "refresh": "刷新"
+  },
+  "modal": {
+    "createTitle": "新建用户",
+    "editTitle": "编辑用户",
+    "deleteTitle": "删除用户",
+    "deleteConfirm": "确定删除用户「{{username}}」？此操作不可恢复。将解除 {{count}} 名下属的上级关系。",
+    "resetPasswordTitle": "重置密码",
+    "resetPasswordConfirm": "将重置「{{username}}」的密码并强制其重新登录；您的会话不受影响。"
+  },
+  "form": {
+    "username": "用户名",
+    "usernameRequired": "请输入用户名",
+    "usernameHint": "3–32 位；仅字母、数字、下划线、连字符；不能以 _ 或 - 开头/结尾。不支持中文。示例：emp01",
+    "usernamePlaceholder": "例如 emp01",
+    "usernameLength": "用户名须为 3–32 个字符",
+    "usernameCharset": "用户名只能包含字母、数字、下划线和连字符（不能使用中文）",
+    "usernameEdge": "用户名不能以连字符或下划线开头/结尾",
+    "password": "初始密码",
+    "passwordRequired": "请输入密码",
+    "passwordHint": "8–128 位；勿使用过于常见的弱密码（如 password、12345678）",
+    "passwordMin": "密码至少 8 位",
+    "passwordMax": "密码不能超过 128 位",
+    "passwordWeak": "密码过于常见，请换一个更强的密码",
+    "department": "部门",
+    "departmentPlaceholder": "例如：采购部",
+    "jobTitle": "岗位",
+    "role": "角色",
+    "manager": "上级",
+    "managerPlaceholder": "可选",
+    "status": "在职状态",
+    "capabilities": "业务权限",
+    "isAdmin": "系统管理员",
+    "isAdminHint": "拥有组织用户管理权限；不可撤销末位管理员或系统默认账号。",
+    "newPassword": "新密码",
+    "newPasswordConfirm": "确认新密码",
+    "passwordMismatch": "两次输入的密码不一致"
+  },
+  "structure": {
+    "title": "组织架构",
+    "hint": "按直属上级生成组织树并绘制汇报连线；未设上级的成员归入下方「未设上级」分区。可拖拽画布、滚轮缩放；调整上级请到「用户」标签页编辑。",
+    "empty": "暂无用户",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "fit": "适应画布",
+    "fitShort": "适应",
+    "resetZoom": "原始大小",
+    "unassigned": "未设上级",
+    "reports": "直属 {{n}}"
+  },
+  "alerts": {
+    "notConfigured": "未配置公司服务器，无法管理用户。",
+    "adminOnly": "仅系统管理员可管理组织用户。",
+    "loadFailed": "加载失败（状态 {{status}}）",
+    "loadFailedGeneric": "加载失败"
+  },
+  "messages": {
+    "created": "用户已创建",
+    "updated": "用户已更新",
+    "deleted": "已删除 {{username}}（解除上级关系 {{count}} 人）",
+    "cannotDeleteSelf": "不能删除当前登录账号",
+    "cannotResetSelf": "请使用「修改密码」更改自己的密码",
+    "deleteFailed": "删除失败（{{detail}}）",
+    "deleteFailedGeneric": "删除失败",
+    "resetPasswordOk": "已重置 {{username}} 的密码",
+    "resetPasswordFailed": "重置密码失败（{{detail}}）",
+    "resetPasswordFailedGeneric": "重置密码失败",
+    "saveFailed": "保存失败（{{detail}}）",
+    "saveFailedGeneric": "保存失败"
+  }
+}

@@ -13,14 +13,18 @@ import {
   Info,
   Lightning,
   LinkCloud,
+  Peoples,
   Puzzle,
   Robot,
   System,
   User,
 } from '@icon-park/react';
+import { useOrgAuth } from '@renderer/hooks/context/OrgAuthContext';
+import { isOrgServerConfigured } from '@/common/adapter/orgHttpBridge';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
+import { DESKTOP_PET_ENABLED } from '@/common/config/constants';
 import { BUILTIN_TAB_IDS, LEGACY_ANCHOR_REMAP } from './SettingsSider';
 import './settings.css';
 
@@ -34,7 +38,12 @@ type NavItem = { label: string; icon: React.ReactElement; path: string; id: stri
 
 type TranslateFn = (key: string, options?: { defaultValue?: string }) => string;
 
-export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): NavItem[] {
+export function getBuiltinSettingsNavItems(
+  isDesktop: boolean,
+  t: TranslateFn,
+  options?: { showOrgAdmin?: boolean }
+): NavItem[] {
+  const showOrgAdmin = options?.showOrgAdmin ?? false;
   const builtinMap: Record<string, NavItem> = {
     model: { id: 'model', label: t('settings.model'), icon: <LinkCloud theme='outline' size='16' />, path: 'model' },
     assistants: {
@@ -74,11 +83,21 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
       icon: <User theme='outline' size='16' />,
       path: 'profile',
     },
+    org: {
+      id: 'org',
+      label: t('orgUsers.sider.title', { defaultValue: '组织' }),
+      icon: <Peoples theme='outline' size='16' />,
+      path: 'org',
+    },
     system: { id: 'system', label: t('settings.system'), icon: <System theme='outline' size='16' />, path: 'system' },
     about: { id: 'about', label: t('settings.about'), icon: <Info theme='outline' size='16' />, path: 'about' },
   };
 
-  return BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
+  return BUILTIN_TAB_IDS.filter((id) => {
+    if (id === 'pet' && (!isDesktop || !DESKTOP_PET_ENABLED)) return false;
+    if (id === 'org' && !showOrgAdmin) return false;
+    return true;
+  }).map((id) => builtinMap[id]);
 }
 
 const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, className, contentClassName }) => {
@@ -88,13 +107,16 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
+  const { orgUser, orgStatus } = useOrgAuth();
+  const showOrgAdmin =
+    isOrgServerConfigured() && orgStatus === 'authenticated' && Boolean(orgUser?.is_admin);
 
   const extensionTabs = useExtensionSettingsTabs();
 
   const { resolveExtTabName } = useExtI18n();
 
   const menuItems = React.useMemo(() => {
-    const builtins = getBuiltinSettingsNavItems(isDesktop, t);
+    const builtins = getBuiltinSettingsNavItems(isDesktop, t, { showOrgAdmin });
 
     // Insert extension tabs before system (unanchored default) or at anchor position
     const result = [...builtins];
@@ -151,7 +173,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
     }
 
     return result;
-  }, [isDesktop, t, extensionTabs, resolveExtTabName]);
+  }, [isDesktop, t, extensionTabs, resolveExtTabName, showOrgAdmin]);
 
   const containerClass = classNames(
     'settings-page-wrapper w-full min-h-full box-border overflow-y-auto',

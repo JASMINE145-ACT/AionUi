@@ -15,10 +15,40 @@ import { readMemoryFile, writeMemoryFile } from './ccbMemoryFiles';
 import type {
   PrecipitationDecisionInput,
   PrecipitationDecisionResult,
+  PrecipitationFunnelEventInput,
   PrecipitationProposal,
   PrecipitationScheduleInput,
   PrecipitationSummary,
 } from './ccbPrecipitationTypes';
+import {
+  sanitizeFunnelEvent,
+  shouldPromoteBusinessRule,
+} from './ccbPrecipitationFunnel';
+import {
+  acquireFullReview,
+  applyRunOutcome,
+  checkpointTurn,
+  loadObligations,
+  readOutcomeFile,
+  recoverObligationsOnRestart,
+  saveObligations,
+  TURN_HARVEST_NUDGE_DEFAULT,
+} from './turnHarvest';
+
+export type PrecipitationCheckpointInput = {
+  sessionId: string;
+  conversationId: string;
+  turnId: string;
+  interrupted?: boolean;
+  failed?: boolean;
+  hasFinalResponse?: boolean;
+};
+
+export type PrecipitationCheckpointResult = {
+  ok: boolean;
+  shouldFullReview: boolean;
+  detail?: string;
+};
 
 const IDLE_SUMMARY: PrecipitationSummary = {
   status: 'idle',
@@ -29,6 +59,8 @@ const IDLE_SUMMARY: PrecipitationSummary = {
   error: null,
   skippedReason: null,
   lastRunAt: null,
+  lastEvent: null,
+  lastWorkerDetail: null,
 };
 
 function learningRoot(configDir: string): string {
@@ -49,6 +81,10 @@ function resolvedPath(configDir: string): string {
 
 function summaryPath(configDir: string): string {
   return path.join(learningRoot(configDir), '.precipitation-summary.json');
+}
+
+function eventsPath(configDir: string): string {
+  return path.join(learningRoot(configDir), 'precipitation_events.jsonl');
 }
 
 function businessRulePromotedPath(configDir: string): string {
@@ -96,6 +132,72 @@ function appendJsonl(filePath: string, obj: Record<string, unknown>): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.appendFileSync(filePath, `${JSON.stringify(obj)}\n`, 'utf8');
 }
+
+function writeSummaryFile(configDir: string, summary: PrecipitationSummary): void {
+  fs.mkdirSync(learningRoot(configDir), { recursive: true });
+  fs.writeFileSync(summaryPath(configDir), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+}
+
+/**
+ * Append a desensitized funnel event and refresh summary lastEvent fields.
+ * Rejects payloads with forbidden keys (HG1).
+ */
+export function recordPrecipitationFunnelEvent(
+  input: PrecipitationFunnelEventInput
+): { ok: boolean; detail?: string } {
+  const configDir = resolveCcbClaudeConfigDir();
+  if (!configDir) return { ok: false, detail: 'ccb_config_missing' };
+
+  const sanitized = sanitizeFunnelEvent({ ...input } as Record<string, unknown>);
+  if (!sanitized) return { ok: false, detail: 'event_redacted_or_invalid' };
+
+  appendJsonl(eventsPath(configDir), sanitized as unknown as Record<string, unknown>);
+
+  const pendingCount =
+    typeof sanitized.pendingCount === 'number'
+      ? sanitized.pendingCount
+      : listPrecipitationProposals().length;
+
+  const prev = readPrecipitationSummary();
+  const next: PrecipitationSummary = {
+    ...prev,
+    pendingCount,
+    updatedAt: sanitized.at,
+    lastEvent: sanitized.event,
+    lastWorkerDetail: sanitized.workerDetail ?? prev.lastWorkerDetail ?? null,
+    skippedReason:
+      sanitized.skippedReason ??
+      (sanitized.event === 'cancelled' || sanitized.event === 'scheduled'
+        ? null
+        : prev.skippedReason),
+    sessionId: input.sessionId?.trim() || prev.sessionId,
+    conversationId: input.conversationId?.trim() || prev.conversationId,
+    status:
+      sanitized.event === 'scheduled' || sanitized.event === 'worker_running'
+        ? 'running'
+        : sanitized.event === 'schedule_skipped' || sanitized.event === 'worker_skipped'
+          ? 'skipped'
+          : sanitized.event === 'cancelled'
+            ? 'idle'
+            : prev.status,
+    lastRunAt:
+      sanitized.event === 'scheduled' || sanitized.event === 'worker_running'
+        ? sanitized.at
+        : prev.lastRunAt,
+  };
+  writeSummaryFile(configDir, next);
+  return { ok: true };
+}
+
+export type DecidePrecipitationDeps = {
+  promoteBusinessRule?: (
+    configDir: string,
+    content: string,
+    proposal: PrecipitationProposal,
+    now: string,
+    reviewNotes?: string
+  ) => { ok: boolean; error?: string };
+};
 
 type ResolvedRow = {
   proposalId: string;
@@ -232,6 +334,8 @@ export function readPrecipitationSummary(): PrecipitationSummary {
         error: typeof data.error === 'string' ? data.error : null,
         skippedReason: typeof data.skippedReason === 'string' ? data.skippedReason : null,
         lastRunAt: typeof data.lastRunAt === 'string' ? data.lastRunAt : null,
+        lastEvent: typeof data.lastEvent === 'string' ? data.lastEvent : null,
+        lastWorkerDetail: typeof data.lastWorkerDetail === 'string' ? data.lastWorkerDetail : null,
       };
     } catch {
       // keep defaults
@@ -242,12 +346,155 @@ export function readPrecipitationSummary(): PrecipitationSummary {
   return summary;
 }
 
+export function checkpointPrecipitationTurn(
+  input: PrecipitationCheckpointInput
+): PrecipitationCheckpointResult {
+  const configDir = resolveCcbClaudeConfigDir();
+  if (!configDir) return { ok: false, shouldFullReview: false, detail: 'ccb_config_missing' };
+  if (!input.sessionId?.trim() || !input.turnId?.trim()) {
+    return { ok: false, shouldFullReview: false, detail: 'missing_session_or_turn' };
+  }
+
+  const map = loadObligations(configDir);
+  const result = checkpointTurn(map, {
+    sessionId: input.sessionId.trim(),
+    conversationId: input.conversationId || '',
+    turnId: input.turnId.trim(),
+    interrupted: input.interrupted,
+    failed: input.failed,
+    hasFinalResponse: input.hasFinalResponse !== false,
+  });
+  saveObligations(configDir, result.map);
+  recordPrecipitationFunnelEvent({
+    event: 'checkpoint',
+    sessionId: input.sessionId,
+    conversationId: input.conversationId,
+    runId: input.turnId,
+    workerDetail: result.shouldFullReview ? 'nudge_ready' : 'checkpoint_only',
+  });
+  return { ok: true, shouldFullReview: result.shouldFullReview };
+}
+
+/** Call once from main bridge init — invalidates orphaned running leases. */
+export function recoverTurnHarvestOnStartup(): void {
+  const configDir = resolveCcbClaudeConfigDir();
+  if (!configDir) return;
+  const recovered = recoverObligationsOnRestart(loadObligations(configDir));
+  saveObligations(configDir, recovered);
+}
+
 export function schedulePrecipitation(input: PrecipitationScheduleInput): { ok: boolean; detail?: string } {
   const configDir = resolveCcbClaudeConfigDir();
-  if (!configDir) return { ok: false, detail: 'ccb_config_missing' };
+  if (!configDir) {
+    recordPrecipitationFunnelEvent({
+      event: 'schedule_skipped',
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId: input.turnId,
+      skippedReason: 'ccb_config_missing',
+      workerDetail: 'ccb_config_missing',
+    });
+    return { ok: false, detail: 'ccb_config_missing' };
+  }
+
+  if (!input.sessionId?.trim()) {
+    recordPrecipitationFunnelEvent({
+      event: 'schedule_skipped',
+      conversationId: input.conversationId,
+      runId: input.turnId,
+      skippedReason: 'missing_session_id',
+      workerDetail: 'missing_session_id',
+    });
+    return { ok: false, detail: 'missing_session_id' };
+  }
 
   const worker = resolvePrecipitationWorkerPath();
-  if (!worker) return { ok: false, detail: 'worker_not_found' };
+  if (!worker) {
+    recordPrecipitationFunnelEvent({
+      event: 'schedule_skipped',
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId: input.turnId,
+      skippedReason: 'worker_not_found',
+      workerDetail: 'worker_not_found',
+    });
+    return { ok: false, detail: 'worker_not_found' };
+  }
+
+  // TurnHarvest acquire: freeze reviewThrough + mint lease (Hermes review gate).
+  let map = loadObligations(configDir);
+  const sid = input.sessionId.trim();
+  if (!input.skipCheckpoint && input.turnId?.trim()) {
+    const cp = checkpointTurn(map, {
+      sessionId: sid,
+      conversationId: input.conversationId || '',
+      turnId: input.turnId.trim(),
+      hasFinalResponse: true,
+    });
+    map = cp.map;
+  } else if (input.turnId?.trim()) {
+    const prev = map[sid];
+    if (!prev) {
+      map = {
+        ...map,
+        [sid]: {
+          sessionId: sid,
+          conversationId: input.conversationId || '',
+          state: 'queued',
+          latestTurnId: input.turnId.trim(),
+          lastProcessedTurnId: '',
+          reviewThroughTurnId: '',
+          turnsSinceFullReview: TURN_HARVEST_NUDGE_DEFAULT,
+          attempt: 0,
+          leaseId: '',
+          leaseOwner: '',
+          leaseExpiresAt: '',
+          lastError: null,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    } else if (!prev.latestTurnId) {
+      map = {
+        ...map,
+        [sid]: {
+          ...prev,
+          latestTurnId: input.turnId.trim(),
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    }
+  }
+  const ob = map[input.sessionId.trim()];
+  const nudgeReady = (ob?.turnsSinceFullReview ?? 0) >= TURN_HARVEST_NUDGE_DEFAULT;
+  if (!input.force && !nudgeReady) {
+    saveObligations(configDir, map);
+    recordPrecipitationFunnelEvent({
+      event: 'schedule_skipped',
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId: input.turnId,
+      skippedReason: 'nudge_not_ready',
+      workerDetail: 'nudge_not_ready',
+    });
+    return { ok: false, detail: 'nudge_not_ready' };
+  }
+  const acquired = acquireFullReview(map, input.sessionId.trim(), { owner: 'aionui-main' });
+  // Always persist post-reclaim map (even when this session cannot acquire).
+  if (!acquired.obligation || !acquired.leaseId) {
+    saveObligations(configDir, acquired.map);
+    recordPrecipitationFunnelEvent({
+      event: 'schedule_skipped',
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId: input.turnId,
+      skippedReason: 'harvest_not_ready',
+      workerDetail: 'harvest_not_ready',
+    });
+    return { ok: false, detail: 'harvest_not_ready' };
+  }
+  saveObligations(configDir, acquired.map);
+  const runId = acquired.obligation.reviewThroughTurnId || input.turnId || '';
+  const leaseId = acquired.leaseId;
 
   const args = [
     worker,
@@ -257,10 +504,13 @@ export function schedulePrecipitation(input: PrecipitationScheduleInput): { ok: 
     input.sessionId,
     '--conversation-id',
     input.conversationId,
+    '--run-id',
+    runId,
+    '--lease-id',
+    leaseId,
+    '--review-through-turn-id',
+    runId,
   ];
-  if (input.turnId) {
-    args.push('--run-id', input.turnId);
-  }
   if (input.agentId) {
     args.push('--agent-id', input.agentId);
   }
@@ -272,10 +522,116 @@ export function schedulePrecipitation(input: PrecipitationScheduleInput): { ok: 
       windowsHide: true,
     });
     child.unref();
+    recordPrecipitationFunnelEvent({
+      event: 'scheduled',
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId,
+      status: 'running',
+      workerDetail: 'turn_harvest',
+    });
+    pollHarvestOutcome({
+      configDir,
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId,
+      leaseId,
+    });
     return { ok: true };
-  } catch (err) {
-    return { ok: false, detail: err instanceof Error ? err.message : 'spawn_failed' };
+  } catch {
+    // Roll back lease so we are not stuck in running.
+    const rolled = loadObligations(configDir);
+    const ob = rolled[input.sessionId.trim()];
+    if (ob && ob.leaseId === leaseId) {
+      rolled[input.sessionId.trim()] = {
+        ...ob,
+        state: 'queued',
+        leaseId: '',
+        leaseOwner: '',
+        leaseExpiresAt: '',
+        updatedAt: new Date().toISOString(),
+      };
+      saveObligations(configDir, rolled);
+    }
+    recordPrecipitationFunnelEvent({
+      event: 'schedule_skipped',
+      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      runId,
+      skippedReason: 'spawn_failed',
+      workerDetail: 'spawn_failed',
+    });
+    return { ok: false, detail: 'spawn_failed' };
   }
+}
+
+function pollHarvestOutcome(input: {
+  configDir: string;
+  sessionId: string;
+  conversationId: string;
+  runId: string;
+  leaseId: string;
+}): void {
+  const delays = [5_000, 15_000, 30_000, 60_000, 120_000];
+  let attempt = 0;
+  const tick = () => {
+    try {
+      const outcome = readOutcomeFile(input.configDir, input.runId);
+      if (!outcome) {
+        if (attempt < delays.length - 1) {
+          attempt += 1;
+          setTimeout(tick, delays[attempt]);
+        }
+        return;
+      }
+      const current = loadObligations(input.configDir);
+      const applied = applyRunOutcome(current, {
+        runId: outcome.runId,
+        sessionId: outcome.sessionId,
+        conversationId: outcome.conversationId,
+        leaseId: outcome.leaseId || input.leaseId,
+        reviewThroughTurnId: outcome.reviewThroughTurnId || input.runId,
+        outcome: outcome.outcome,
+        proposalCount: outcome.proposalCount,
+        retryable: outcome.retryable,
+        errorCode: outcome.errorCode,
+      });
+      if (applied.accepted) {
+        saveObligations(input.configDir, applied.map);
+        recordPrecipitationFunnelEvent({
+          event: 'harvest_outcome',
+          sessionId: input.sessionId,
+          conversationId: input.conversationId,
+          runId: input.runId,
+          workerDetail: outcome.outcome,
+        });
+        const ob = applied.map[input.sessionId.trim()];
+        if (ob?.state === 'queued' && ob.latestTurnId && ob.latestTurnId !== ob.lastProcessedTurnId) {
+          // Immediate follow-up FullReview for turns that arrived during the prior run.
+          setTimeout(() => {
+            schedulePrecipitation({
+              sessionId: input.sessionId,
+              conversationId: input.conversationId,
+              turnId: ob.latestTurnId,
+              force: true,
+              skipCheckpoint: true,
+            });
+          }, 500);
+        }
+      } else if (applied.reason === 'stale_lease' || applied.reason === 'lease_expired') {
+        recordPrecipitationFunnelEvent({
+          event: 'stale_lease',
+          sessionId: input.sessionId,
+          conversationId: input.conversationId,
+          runId: input.runId,
+          workerDetail: applied.reason,
+        });
+      }
+    } catch {
+      // non-fatal
+    }
+  };
+  setTimeout(tick, delays[0]);
 }
 
 function applyApprovedPersonalHabit(content: string, target: 'workflow' | 'profile' = 'workflow'): void {
@@ -348,6 +704,7 @@ function applyApprovedBusinessRule(
       ok?: boolean;
       error?: string;
       skipped?: boolean;
+      result?: { applied?: boolean; skipped?: boolean; requires_confirmation?: boolean };
     };
     if (parsed.ok !== true) {
       if (parsed.error === 'org_api_not_configured') {
@@ -355,12 +712,24 @@ function applyApprovedBusinessRule(
       }
       return { ok: false, error: parsed.error || 'org_promote_failed' };
     }
+    // Promote gate: exit 0 / ok:true is insufficient — require applied or explicit duplicate skip.
+    const inner = parsed.result;
+    const applied = inner?.applied === true;
+    const duplicateSkip = parsed.skipped === true || inner?.skipped === true;
+    const needsConfirm = inner?.requires_confirmation === true;
+    if (needsConfirm || (!applied && !duplicateSkip)) {
+      return {
+        ok: false,
+        error: needsConfirm ? 'requires_confirmation' : 'org_promote_not_applied',
+      };
+    }
     appendJsonl(businessRulePromotedPath(configDir), {
       proposalId: proposal.id,
       content,
       sessionId: proposal.sessionId,
       conversationId: proposal.conversationId,
-      skipped: parsed.skipped === true,
+      skipped: duplicateSkip,
+      applied,
       at: now,
     });
     return { ok: true };
@@ -401,7 +770,10 @@ function applyApprovedEvalCase(configDir: string, content: string, proposal: Pre
   }
 }
 
-export function decidePrecipitationProposal(input: PrecipitationDecisionInput): PrecipitationDecisionResult {
+export function decidePrecipitationProposal(
+  input: PrecipitationDecisionInput,
+  deps: DecidePrecipitationDeps = {}
+): PrecipitationDecisionResult {
   const configDir = resolveCcbClaudeConfigDir();
   if (!configDir) return { ok: false, error: 'ccb_config_missing' };
 
@@ -441,6 +813,13 @@ export function decidePrecipitationProposal(input: PrecipitationDecisionInput): 
       reviewNotes: input.reviewNotes ?? null,
       at: now,
     });
+    recordPrecipitationFunnelEvent({
+      event: 'denied',
+      sessionId: found.sessionId,
+      conversationId: found.conversationId,
+      runId: input.proposalId,
+      pendingCount: listPrecipitationProposals().length,
+    });
     return { ok: true };
   }
 
@@ -449,7 +828,11 @@ export function decidePrecipitationProposal(input: PrecipitationDecisionInput): 
       found.metadata?.target === 'profile' ? 'profile' : ('workflow' as 'workflow' | 'profile');
     applyApprovedPersonalHabit(finalContent, target);
   } else if (found.lane === 'business_rule') {
-    const promoted = applyApprovedBusinessRule(configDir, finalContent, found, now, input.reviewNotes);
+    if (!shouldPromoteBusinessRule(input.action, found.lane)) {
+      return { ok: false, error: 'promotion_requires_approve' };
+    }
+    const promote = deps.promoteBusinessRule ?? applyApprovedBusinessRule;
+    const promoted = promote(configDir, finalContent, found, now, input.reviewNotes);
     if (!promoted.ok) {
       return { ok: false, error: promoted.error || 'org_promote_failed' };
     }
@@ -474,22 +857,13 @@ export function decidePrecipitationProposal(input: PrecipitationDecisionInput): 
     at: now,
   });
 
-  const summaryFile = summaryPath(configDir);
-  const summary = readPrecipitationSummary();
-  fs.writeFileSync(
-    summaryFile,
-    JSON.stringify(
-      {
-        ...summary,
-        status: 'done',
-        pendingCount: listPrecipitationProposals().length,
-        updatedAt: now,
-      },
-      null,
-      2
-    ) + '\n',
-    'utf8'
-  );
+  recordPrecipitationFunnelEvent({
+    event: 'approved',
+    sessionId: found.sessionId,
+    conversationId: found.conversationId,
+    runId: input.proposalId,
+    pendingCount: listPrecipitationProposals().length,
+  });
 
   return { ok: true };
 }

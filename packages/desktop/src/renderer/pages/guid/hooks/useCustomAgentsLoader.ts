@@ -8,6 +8,7 @@ import {
   ASSISTANTS_LIST_SWR_KEY,
   fetchAssistantsCatalog,
 } from '@/common/assistants/fetchAssistantsCatalog';
+import { applyGuidZeroCardList } from '@/common/config/guidZeroCard';
 import { ipcBridge } from '@/common';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
@@ -78,7 +79,8 @@ export const useCustomAgentsLoader = ({
       return [] as Assistant[];
     }
   });
-  const assistants = assistantList ?? [];
+  // Guid surface only — zero-card must not mutate shared SWR for Team/Settings.
+  const assistants = applyGuidZeroCardList(assistantList ?? []);
 
   useEffect(() => {
     void swrMutate(ASSISTANTS_LIST_SWR_KEY);
@@ -89,8 +91,11 @@ export const useCustomAgentsLoader = ({
   // same `DETECTED_AGENTS_SWR_KEY` so we make at most one network request.
   const { agents, revalidate } = useAgents();
   const customAgents = useMemo(
-    () => agents.filter((a) => a.agent_source === 'custom' && availableCustomAgentIds.has(a.id)),
-    [agents, availableCustomAgentIds]
+    () =>
+      applyGuidZeroCardList(
+        agents.filter((a) => a.agent_source === 'custom' && availableCustomAgentIds.has(a.id)),
+      ),
+    [agents, availableCustomAgentIds],
   );
 
   const customAgentAvatarMap = useMemo(() => {

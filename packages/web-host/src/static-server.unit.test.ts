@@ -357,4 +357,93 @@ describe('static-server', () => {
     expect(typeof h2.networkUrl === 'string' || h2.networkUrl === undefined).toBe(true);
     await h2.stop();
   });
+
+  it('GET /api/webui/runtime-config returns org runtime config when webUiSurface set', async () => {
+    const backend = await startMockBackend((_req, res) => res.end('nope'));
+    stopBackend = backend.close;
+    handle = await startStaticServer({
+      staticDir,
+      backendPort: backend.port,
+      port: 0,
+      webUiSurface: {
+        getRuntimeConfig: () => ({ orgServerUrl: 'http://org.test:13401', ssoMode: 'org-idp' }),
+        isCcbAuthorityActive: () => true,
+        listCcbAgents: async () => [{ id: 'agent-1' }],
+      },
+    });
+
+    const r = await fetch(`${handle.localUrl}/api/webui/runtime-config`);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ orgServerUrl: 'http://org.test:13401', ssoMode: 'org-idp' });
+  });
+
+  it('GET /api/webui/ccb/authority returns active flag from webUiSurface', async () => {
+    const backend = await startMockBackend((_req, res) => res.end('nope'));
+    stopBackend = backend.close;
+    handle = await startStaticServer({
+      staticDir,
+      backendPort: backend.port,
+      port: 0,
+      webUiSurface: {
+        getRuntimeConfig: () => ({ orgServerUrl: '', ssoMode: '' }),
+        isCcbAuthorityActive: () => true,
+        listCcbAgents: async () => [],
+      },
+    });
+
+    const r = await fetch(`${handle.localUrl}/api/webui/ccb/authority`);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ active: true });
+  });
+
+  it('GET /api/webui/ccb/agents returns agents from webUiSurface', async () => {
+    const backend = await startMockBackend((_req, res) => res.end('nope'));
+    stopBackend = backend.close;
+    const agents = [{ id: 'wanding-main', name: 'Main' }];
+    handle = await startStaticServer({
+      staticDir,
+      backendPort: backend.port,
+      port: 0,
+      webUiSurface: {
+        getRuntimeConfig: () => ({ orgServerUrl: '', ssoMode: '' }),
+        isCcbAuthorityActive: () => true,
+        listCcbAgents: async () => agents,
+      },
+    });
+
+    const r = await fetch(`${handle.localUrl}/api/webui/ccb/agents`);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ agents });
+  });
+
+  it('/api/webui/org/* reverse-proxies to orgServerUrl', async () => {
+    const backend = await startMockBackend((_req, res) => res.end('nope'));
+    stopBackend = backend.close;
+
+    const orgBackend = await startMockBackend((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ path: req.url, method: req.method, auth: req.headers.authorization ?? null }));
+    });
+
+    handle = await startStaticServer({
+      staticDir,
+      backendPort: backend.port,
+      port: 0,
+      webUiSurface: {
+        getRuntimeConfig: async () => ({ orgServerUrl: `http://127.0.0.1:${orgBackend.port}`, ssoMode: '' }),
+        isCcbAuthorityActive: () => false,
+        listCcbAgents: async () => [],
+      },
+    });
+
+    const r = await fetch(`${handle.localUrl}/api/webui/org/api/org-knowledge`, {
+      headers: { Authorization: 'Bearer test-token' },
+    });
+    expect(r.status).toBe(200);
+    const json = (await r.json()) as { path: string; auth: string };
+    expect(json.path).toBe('/api/org-knowledge');
+    expect(json.auth).toBe('Bearer test-token');
+
+    await orgBackend.close();
+  });
 });

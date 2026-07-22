@@ -1,4 +1,5 @@
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbModelService } from '@/common/adapter/ipcBridge';
 import {
   persistConversationContinuityBinding,
@@ -80,12 +81,17 @@ export async function warmupConversation(
     attempt: nextAttempt,
   });
 
-  const promise = ccbModelService.stageConversationIdentity
-    .invoke({ conversation_id })
-    .catch((error: unknown) => {
-      console.warn('[warmupConversation] stageConversationIdentity failed:', error);
-    })
-    .then(() => stageCcbAssistantProfileFromConversation(conversation_id))
+  // WebUI: CCB Electron providers never reply to invoke — skip identity/profile staging.
+  const stageIdentity = isWebUiBrowserMode()
+    ? Promise.resolve()
+    : ccbModelService.stageConversationIdentity.invoke({ conversation_id }).catch((error: unknown) => {
+        console.warn('[warmupConversation] stageConversationIdentity failed:', error);
+      });
+
+  const promise = stageIdentity
+    .then(() =>
+      isWebUiBrowserMode() ? undefined : stageCcbAssistantProfileFromConversation(conversation_id)
+    )
     .then(() => stageEmployeeProfileForSession())
     .then(() => ipcBridge.conversation.warmup.invoke({ conversation_id }))
     .then(async () => {

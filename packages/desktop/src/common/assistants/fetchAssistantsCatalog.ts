@@ -5,7 +5,9 @@
  */
 
 import { assistants, ccbAgentsService, ccbModelService } from '@/common/adapter/ipcBridge';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { getOrgBearerToken, isOrgServerConfigured, orgRawFetch } from '@/common/adapter/orgHttpBridge';
+import { fetchWebUiCcbAgents, fetchWebUiCcbAuthority } from '@/common/webui/ccbWebApi';
 import { assistantFromCcbAgent, filterGuidCatalogAgents } from '@/common/config/ccbAgentCatalog';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 
@@ -29,13 +31,25 @@ export async function resolveIsOrgPriceAdmin(): Promise<boolean> {
 
 /** Preset assistant catalog — CCB agent files when authority active, else backend /api/assistants. */
 export async function fetchAssistantsCatalog(): Promise<Assistant[]> {
-  const ccbAuthorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
+  // WebUI: platform invoke never rejects; prefer same-origin HTTP (no hang on Electron CCB providers).
+  const ccbAuthorityActive = isWebUiBrowserMode()
+    ? await fetchWebUiCcbAuthority().catch(() => false)
+    : await ccbModelService.isAuthorityActive.invoke().catch(() => false);
 
   if (ccbAuthorityActive) {
-    const [ccbAgents, isPriceAdmin] = await Promise.all([
-      ccbAgentsService.listAgents.invoke(),
-      resolveIsOrgPriceAdmin().catch(() => false),
-    ]);
+    const isPriceAdminPromise = resolveIsOrgPriceAdmin().catch(() => false);
+    let ccbAgents;
+    if (isWebUiBrowserMode()) {
+      ccbAgents = await fetchWebUiCcbAgents();
+    } else {
+      try {
+        ccbAgents = await ccbAgentsService.listAgents.invoke();
+      } catch {
+        throw new Error('Failed to load CCB agents catalog');
+      }
+    }
+
+    const isPriceAdmin = await isPriceAdminPromise;
     return filterGuidCatalogAgents(ccbAgents, { isPriceAdmin })
       .map((agent, index) => assistantFromCcbAgent(agent, index))
       .sort((a, b) => {

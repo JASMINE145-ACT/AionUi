@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbMcpService } from '@/common/adapter/ipcBridge';
 import type { TMessage } from '@/common/chat/chatLib';
 import {
@@ -82,7 +83,10 @@ export const useAcpInitialMessage = ({
         setAiProcessing(true);
 
         if (ccbAuthorityActive) {
-          await ccbMcpService.ensureStartupReadiness.invoke();
+          // WebUI: Electron MCP readiness IPC never resolves — skip; warmup handles ACP session.
+          if (!isWebUiBrowserMode()) {
+            await ccbMcpService.ensureStartupReadiness.invoke();
+          }
           await warmupConversation(conversation_id);
           const preferredMode = getCcbSessionPreferredMode(
             conversation_id,

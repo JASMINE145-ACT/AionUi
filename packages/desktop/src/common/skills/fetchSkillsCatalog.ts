@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbModelService, ccbSkillsService, fs } from '@/common/adapter/ipcBridge';
+import { fetchWebUiCcbAuthority } from '@/common/webui/ccbWebApi';
 import type { CcbSkillInfo } from '@/common/config/ccbSkillsShared';
 
 export type SettingsSkillInfo = {
@@ -72,8 +74,10 @@ async function fetchUpstreamSettingsSkillsCatalog(): Promise<Omit<SettingsSkills
 
 /** Settings → 技能 hub catalog — CCB `.claude/skills` when authority active, else upstream AionUI corpus. */
 export async function fetchSettingsSkillsCatalog(): Promise<SettingsSkillsCatalog> {
-  const ccbAuthorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
-  if (ccbAuthorityActive) {
+  const ccbAuthorityActive = isWebUiBrowserMode()
+    ? await fetchWebUiCcbAuthority().catch(() => false)
+    : await ccbModelService.isAuthorityActive.invoke().catch(() => false);
+  if (ccbAuthorityActive && !isWebUiBrowserMode()) {
     const catalog = await fetchCcbSettingsSkillsCatalog();
     return { ...catalog, source: 'ccb' };
   }

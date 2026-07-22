@@ -8,6 +8,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbModelService } from '@/common/adapter/ipcBridge';
 import type { ICreateConversationParams } from '@/common/adapter/ipcBridge';
 import type { TMessage } from '@/common/chat/chatLib';
@@ -90,6 +91,9 @@ async function inferCcbSpecialistProfileFromConversation(conversation_id: string
 }
 
 export async function stageCcbAssistantProfileForSession(profileId: string | undefined): Promise<void> {
+  // WebUI: CCB profile staging IPC never resolves; create path already writes extras.
+  if (isWebUiBrowserMode()) return;
+
   const id = profileId?.trim() ? stripBuiltinAssistantIdPrefix(profileId.trim()) : '';
   if (!id) return;
 
@@ -104,6 +108,9 @@ export async function stageCcbAssistantProfileForSession(profileId: string | und
 }
 
 export async function stageCcbAssistantProfileFromConversation(conversation_id: string): Promise<void> {
+  // WebUI has no CCB profile staging IPC — identity travels on conversation.extra instead.
+  if (isWebUiBrowserMode()) return;
+
   const authorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
   if (!authorityActive) return;
 
@@ -142,16 +149,19 @@ export async function buildCcbPresetConversationExtra(
   }
 
   const id = stripBuiltinAssistantIdPrefix(profileId);
-  try {
-    const profile = await ipcBridge.ccbAssistantProfilesService.getProfile.invoke({ id });
-    if (!profile) {
-      console.warn('[buildCcbPresetConversationExtra] profile_not_found', { profile_id: id });
+  // WebUI: skip profile IPC probe (never resolves); extras alone are enough for session create.
+  if (!isWebUiBrowserMode()) {
+    try {
+      const profile = await ipcBridge.ccbAssistantProfilesService.getProfile.invoke({ id });
+      if (!profile) {
+        console.warn('[buildCcbPresetConversationExtra] profile_not_found', { profile_id: id });
+      }
+    } catch (error) {
+      console.warn('[buildCcbPresetConversationExtra] profile_lookup_failed', {
+        profile_id: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-  } catch (error) {
-    console.warn('[buildCcbPresetConversationExtra] profile_lookup_failed', {
-      profile_id: id,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 
   return {

@@ -7,6 +7,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { isWebUiBrowserMode } from '@/common/adapter/httpBridge';
 import { ccbModelService } from '@/common/adapter/ipcBridge';
 import {
   CONTINUITY_EXTRA_KEYS,
@@ -141,6 +142,15 @@ export async function prepareConversationContinuity(
   conversation_id: string,
   options: { force?: boolean } = {},
 ): Promise<PrepareConversationContinuityResult> {
+  // WebUI: CCB continuity snapshot IPC never settles — skip refresh gate; warmup still runs.
+  if (isWebUiBrowserMode()) {
+    return {
+      ccbAuthority: false,
+      forceWarmup: Boolean(options.force),
+      needsRefresh: false,
+    };
+  }
+
   const authorityActive = await ccbModelService.isAuthorityActive.invoke().catch(() => false);
   if (!authorityActive) {
     return {

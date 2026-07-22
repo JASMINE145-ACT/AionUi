@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { filterGuidCatalogAgents } from '@/common/config/ccbAgentCatalog';
+import { applyGuidZeroCardList, isGuidZeroCardEnabled } from '@/common/config/guidZeroCard';
+import { STORAGE_KEYS } from '@/common/config/storageKeys';
 import type { CcbAgentRecord } from '@/common/config/ccbAgents';
 
 function agent(partial: Partial<CcbAgentRecord> & Pick<CcbAgentRecord, 'id' | 'name'>): CcbAgentRecord {
@@ -68,5 +70,54 @@ describe('filterGuidCatalogAgents', () => {
       { isPriceAdmin: true },
     );
     expect(filtered.map((item) => item.id)).toEqual(['price-library-agent']);
+  });
+
+  it('returns empty when zeroCard is true (Guid surface only)', () => {
+    const filtered = filterGuidCatalogAgents(
+      [
+        agent({ id: 'quotation-agent', name: 'quotation-agent', source: 'bundled', guid_primary: true }),
+        agent({ id: 'custom', name: 'Custom', guid_primary: true }),
+      ],
+      { zeroCard: true, isPriceAdmin: true },
+    );
+    expect(filtered).toEqual([]);
+  });
+});
+
+describe('guidZeroCard flag (G2 default on)', () => {
+  const store = new Map<string, string>();
+
+  beforeEach(() => {
+    store.clear();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('defaults to on when unset (G2)', () => {
+    expect(isGuidZeroCardEnabled()).toBe(true);
+    expect(applyGuidZeroCardList([{ id: 'a' }])).toEqual([]);
+  });
+
+  it('shows Guid cards when localStorage flag is 0 (opt-out)', () => {
+    localStorage.setItem(STORAGE_KEYS.CCB_GUID_ZERO_CARD, '0');
+    expect(isGuidZeroCardEnabled()).toBe(false);
+    expect(applyGuidZeroCardList([{ id: 'a' }, { id: 'b' }])).toEqual([{ id: 'a' }, { id: 'b' }]);
+  });
+
+  it('keeps zero-card when localStorage flag is 1', () => {
+    localStorage.setItem(STORAGE_KEYS.CCB_GUID_ZERO_CARD, '1');
+    expect(isGuidZeroCardEnabled()).toBe(true);
+    expect(applyGuidZeroCardList([{ id: 'a' }])).toEqual([]);
   });
 });

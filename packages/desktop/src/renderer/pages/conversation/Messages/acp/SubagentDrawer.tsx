@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { IMessageAcpToolCall } from '@/common/chat/chatLib';
+import type { IMessageAcpToolCall, IMessagePlan } from '@/common/chat/chatLib';
 import {
   findDelegationRunForParent,
   formatDelegationHeader,
@@ -15,8 +15,11 @@ import { normalizeToolMessages, type ToolMessage } from '@/common/chat/normalize
 import MarkdownView from '@renderer/components/Markdown';
 import { Drawer, Tag } from '@arco-design/web-react';
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import DelegationRunChildSteps from '../components/DelegationRunChildSteps';
+import PlanChecklist from '../components/PlanChecklist';
 import '../components/MessageToolGroupSummary.css';
+import { resolveLatestPlanForDelegation } from '../utils/resolveLatestPlanForDelegation';
 import {
   extractAgentDelegationPrompt,
   getAgentDelegationLabel,
@@ -28,6 +31,8 @@ type SubagentDrawerProps = {
   message: IMessageAcpToolCall;
   /** Same-turn tool messages — enables nested timeline via buildDelegationRuns. */
   turnToolMessages?: ToolMessage[];
+  /** Same-turn plan messages — subagent TodoWrite for read-only checklist. */
+  turnPlanMessages?: IMessagePlan[];
 };
 
 const StatusTag: React.FC<{ status: string }> = ({ status }) => {
@@ -44,7 +49,14 @@ const mapAcpStatus = (status: string): 'completed' | 'error' | 'running' | 'pend
   return 'running';
 };
 
-const SubagentDrawer: React.FC<SubagentDrawerProps> = ({ visible, onClose, message, turnToolMessages }) => {
+const SubagentDrawer: React.FC<SubagentDrawerProps> = ({
+  visible,
+  onClose,
+  message,
+  turnToolMessages,
+  turnPlanMessages,
+}) => {
+  const { t } = useTranslation();
   const { update } = message.content;
   const subagentType = getAgentDelegationLabel(update.rawInput, update.title);
   const label = resolveDelegationDisplayLabel(subagentType);
@@ -90,6 +102,10 @@ const SubagentDrawer: React.FC<SubagentDrawerProps> = ({ visible, onClose, messa
 
   const childAgentId = delegationRun?.childAgentId ?? outputMeta.agentId;
   const nestedChildren = delegationRun?.children ?? [];
+  const delegationPlan = useMemo(
+    () => resolveLatestPlanForDelegation(turnPlanMessages ?? [], update.tool_call_id),
+    [turnPlanMessages, update.tool_call_id],
+  );
 
   return (
     <Drawer
@@ -119,6 +135,15 @@ const SubagentDrawer: React.FC<SubagentDrawerProps> = ({ visible, onClose, messa
           <DelegationRunChildSteps children={nestedChildren} />
         </section>
       )}
+
+      {delegationPlan ? (
+        <section className='mb-4' data-testid='subagent-drawer-plan'>
+          <PlanChecklist
+            message={delegationPlan}
+            sectionTitle={t('conversation.plan.drawer.sectionTitle')}
+          />
+        </section>
+      ) : null}
 
       {taskPrompt && (
         <section className='mb-4'>

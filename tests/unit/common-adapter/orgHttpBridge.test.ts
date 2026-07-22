@@ -123,4 +123,33 @@ describe('orgHttpBridge', () => {
       expect.objectContaining({ method: 'DELETE' })
     );
   });
+
+  it('orgHttpRequest uses same-origin /api/webui/org proxy in WebUI browser mode', async () => {
+    (globalThis as { window?: { __orgServerUrl?: string }; document?: object }).window = {
+      __orgServerUrl: 'http://org.local:13401',
+    };
+    (globalThis as { document?: object }).document = {};
+    vi.spyOn(orgAuthSession, 'getOrgSessionToken').mockReturnValue('org-test-token');
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, data: [{ slug: 'wanding_business_knowledge' }] }),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await orgHttpRequest('GET', '/api/org-knowledge');
+    expect(result).toEqual([{ slug: 'wanding_business_knowledge' }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/webui/org/api/org-knowledge',
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer org-test-token' }),
+      })
+    );
+
+    delete (globalThis as { window?: unknown; document?: unknown }).window;
+    delete (globalThis as { document?: unknown }).document;
+  });
 });
